@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import type { AuroraAPIResponse, GreenPathRecommendation } from '@/types/noaa'
+import { DEMO_SCENARIOS } from '@/lib/mockScenarios'
 import DashboardHeader from '@/components/DashboardHeader'
 import AVSGauge from '@/components/AVSGauge'
 import GeomagneticPanel from '@/components/GeomagneticPanel'
@@ -24,6 +26,11 @@ const AuroraMap = dynamic(() => import('@/components/AuroraMap'), {
 const POLL_INTERVAL_MS = 30_000
 
 export default function AuroraPathDashboard() {
+  const searchParams = useSearchParams()
+  const demoParam = searchParams.get('demo')
+  const demoId = demoParam ? parseInt(demoParam, 10) : null
+  const activeScenario = demoId ? DEMO_SCENARIOS.find(s => s.id === demoId) ?? null : null
+
   const [auroraData, setAuroraData] = useState<AuroraAPIResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,7 +40,8 @@ export default function AuroraPathDashboard() {
 
   const fetchAuroraData = useCallback(async () => {
     try {
-      const res = await fetch('/api/aurora')
+      const url = demoId ? `/api/aurora?demo=${demoId}` : '/api/aurora'
+      const res = await fetch(url)
       if (!res.ok) throw new Error(`API error: ${res.status}`)
       const data = (await res.json()) as AuroraAPIResponse
       setAuroraData(data)
@@ -43,7 +51,7 @@ export default function AuroraPathDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [demoId])
 
   // Initial fetch
   useEffect(() => {
@@ -66,6 +74,16 @@ export default function AuroraPathDashboard() {
       })
     }
   }
+
+  // In demo mode, pre-load the scenario's canned recommendations
+  useEffect(() => {
+    if (activeScenario) {
+      setRecommendations(activeScenario.recommendations)
+      setSelectedRecIndex(null)
+    } else {
+      setRecommendations([])
+    }
+  }, [demoId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen">
@@ -90,6 +108,52 @@ export default function AuroraPathDashboard() {
               >
                 Retry
               </button>
+            </div>
+          )}
+
+          {/* Demo mode banner */}
+          {activeScenario && (
+            <div className="bg-aurora-purple/10 border border-aurora-purple/40 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
+              <span className="text-aurora-purple text-sm font-semibold">🎬 Demo Mode</span>
+              <span className="text-xs text-gray-400">{activeScenario.name} — {activeScenario.description}</span>
+              <div className="flex gap-2 ml-auto flex-wrap">
+                {DEMO_SCENARIOS.map(s => (
+                  <a
+                    key={s.id}
+                    href={`?demo=${s.id}`}
+                    className={`text-xs px-2 py-1 rounded-lg border transition-colors ${
+                      s.id === demoId
+                        ? 'bg-aurora-purple/30 border-aurora-purple text-aurora-purple font-semibold'
+                        : 'border-aurora-border text-gray-500 hover:border-aurora-purple/50 hover:text-gray-300'
+                    }`}
+                  >
+                    G{s.aurora.gScale}
+                  </a>
+                ))}
+                <a href="/" className="text-xs px-2 py-1 rounded-lg border border-aurora-green/40 text-aurora-green hover:bg-aurora-green/10 transition-colors">
+                  Live ↗
+                </a>
+              </div>
+            </div>
+          )}
+          {!activeScenario && (
+            <div className="flex justify-end">
+              <details className="group">
+                <summary className="text-xs text-gray-700 hover:text-gray-500 cursor-pointer select-none list-none">
+                  🎬 Demo mode
+                </summary>
+                <div className="absolute right-4 mt-1 flex gap-2 bg-aurora-card border border-aurora-border rounded-lg px-3 py-2 shadow-lg z-10">
+                  {DEMO_SCENARIOS.map(s => (
+                    <a
+                      key={s.id}
+                      href={`?demo=${s.id}`}
+                      className="text-xs px-2 py-1 rounded border border-aurora-border text-gray-400 hover:text-aurora-purple hover:border-aurora-purple/50 transition-colors whitespace-nowrap"
+                    >
+                      G{s.aurora.gScale} {s.name.split('—')[0].trim()}
+                    </a>
+                  ))}
+                </div>
+              </details>
             </div>
           )}
 

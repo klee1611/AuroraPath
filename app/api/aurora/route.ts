@@ -1,11 +1,24 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getNOAAData } from '@/lib/noaa'
 import { buildAuroraResponse } from '@/lib/vscore'
+import { getScenario } from '@/lib/mockScenarios'
 
 export const revalidate = 300 // Cache for 5 minutes via next/cache
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // Demo mode: ?demo=1..4 returns a canned scenario for presentations/testing
+    const demoParam = req.nextUrl.searchParams.get('demo')
+    if (demoParam) {
+      const scenario = getScenario(parseInt(demoParam, 10))
+      if (scenario) {
+        return NextResponse.json(
+          { ...scenario.aurora, isMockData: true },
+          { headers: { 'Cache-Control': 'no-store', 'X-Demo-Scenario': scenario.name } }
+        )
+      }
+    }
+
     const data = await getNOAAData()
     const response = buildAuroraResponse(data)
     return NextResponse.json(response, {
