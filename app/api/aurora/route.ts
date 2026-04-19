@@ -3,7 +3,8 @@ import { getNOAAData } from '@/lib/noaa'
 import { buildAuroraResponse } from '@/lib/vscore'
 import { getScenario } from '@/lib/mockScenarios'
 
-export const revalidate = 300 // Cache for 5 minutes via next/cache
+export const dynamic = 'force-dynamic' // Uses searchParams at runtime
+export const revalidate = 0
 
 export async function GET(req: NextRequest) {
   try {
