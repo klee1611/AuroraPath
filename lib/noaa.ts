@@ -38,7 +38,7 @@ async function fetchLatestSolarWind(): Promise<SolarWindEntry | null> {
     const res = await fetchWithTimeout(NOAA_PLASMA_URL)
     if (!res.ok) return null
     const rows = (await res.json()) as string[][]
-    // rows[0] is header; get last few entries and average speed/density
+    // rows[0] is header; take the last valid entry as the most-recent reading
     const data = rows.slice(-5).filter(r => r.length === 4 && r[0] !== 'time_tag')
     if (!data.length) return null
     const last = data[data.length - 1]

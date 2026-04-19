@@ -61,11 +61,12 @@ export default function AuroraPathDashboardClient() {
     fetchAuroraData()
   }, [fetchAuroraData])
 
-  // Polling every 30s
+  // Polling every 30s — skip in demo mode (data is canned, no point hammering the API)
   useEffect(() => {
+    if (demoId) return
     const interval = setInterval(fetchAuroraData, POLL_INTERVAL_MS)
     return () => clearInterval(interval)
-  }, [fetchAuroraData])
+  }, [fetchAuroraData, demoId])
 
   // Track user location when Green Path is fetched
   function handleRecommendations(recs: GreenPathRecommendation[]) {
@@ -135,7 +136,8 @@ export default function AuroraPathDashboardClient() {
               </div>
             </div>
           )}
-          {!activeScenario && (
+          {/* Demo switcher — only rendered in development builds */}
+          {IS_DEV && !activeScenario && (
             <div className="flex justify-end">
               <details className="group">
                 <summary className="text-xs text-gray-700 hover:text-gray-500 cursor-pointer select-none list-none">

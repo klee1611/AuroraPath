@@ -24,7 +24,8 @@ function sanitizeRegion(raw: unknown): string {
 function corsHeaders(req: NextRequest): Record<string, string> {
   const origin = process.env.AUTH0_BASE_URL ?? 'http://localhost:3000'
   const requestOrigin = req.headers.get('origin') ?? ''
-  const allowedOrigin = requestOrigin === origin ? origin : origin
+  // Only echo back the origin if it matches our own; otherwise deny cross-origin
+  const allowedOrigin = requestOrigin === origin ? origin : ''
   return {
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',

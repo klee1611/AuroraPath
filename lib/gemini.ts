@@ -2,6 +2,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { GreenPathRecommendation } from '@/types/noaa'
 
 const RATE_LIMIT_MS = 5 * 60 * 1000 // 5 minutes
+const GEMINI_MODEL = 'gemini-3.1-flash-lite-preview'
+
 /**
  * In-memory rate limiting — intentionally simple for a hackathon demo.
  * NOTE: In serverless environments (Vercel), each function invocation may run in
@@ -9,6 +11,18 @@ const RATE_LIMIT_MS = 5 * 60 * 1000 // 5 minutes
  * instances. For production use, replace with a shared store (e.g., Upstash Redis).
  */
 const rateLimitMap = new Map<string, number>()
+
+// Module-level singleton — avoids re-instantiating the client on every request.
+// Will be null if GEMINI_API_KEY is missing (handled in getGreenPathRecommendations).
+let genAI: GoogleGenerativeAI | null = null
+function getGenAI(): GoogleGenerativeAI {
+  if (!genAI) {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) throw new Error('Gemini API key not configured.')
+    genAI = new GoogleGenerativeAI(apiKey)
+  }
+  return genAI
+}
 
 const SYSTEM_PROMPT = `You are GreenPath, an expert eco-travel advisor specializing in sustainable aurora borealis viewing.
 Your mission aligns with Earth Day values: help people connect with nature while minimizing their carbon footprint.
@@ -77,12 +91,8 @@ export async function getGreenPathRecommendations(
     throw new Error(`Rate limit: please wait ${waitMin} more minute${waitMin !== 1 ? 's' : ''} before requesting a new Green Path.`)
   }
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error('Gemini API key not configured.')
-
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-3.1-flash-lite-preview',
+  const model = getGenAI().getGenerativeModel({
+    model: GEMINI_MODEL,
     systemInstruction: SYSTEM_PROMPT,
   })
 
@@ -118,6 +128,17 @@ export async function getGreenPathRecommendations(
     throw new Error('Invalid response from Gemini')
   }
 
+  // Validate required numeric fields — a hallucinated response with invalid coords
+  // would silently break the map. Reject any item missing key fields.
+  const validated = recommendations.filter(r =>
+    typeof r.name === 'string' &&
+    typeof r.lat === 'number' && r.lat >= -90 && r.lat <= 90 &&
+    typeof r.lng === 'number' && r.lng >= -180 && r.lng <= 180 &&
+    typeof r.distanceKm === 'number' &&
+    typeof r.darkSkyRating === 'number'
+  )
+  if (validated.length === 0) throw new Error('Gemini returned no valid recommendations.')
+
   recordRateLimitCall(userId, ip)
-  return recommendations.slice(0, 3)
+  return validated.slice(0, 3)
 }
