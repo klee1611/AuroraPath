@@ -25,9 +25,12 @@ const AuroraMap = dynamic(() => import('@/components/AuroraMap'), {
 
 const POLL_INTERVAL_MS = 30_000
 
+const IS_DEV = process.env.NODE_ENV === 'development'
+
 export default function AuroraPathDashboardClient() {
   const searchParams = useSearchParams()
-  const demoParam = searchParams.get('demo')
+  // Demo mode is dev-only — ignore ?demo param in production
+  const demoParam = IS_DEV ? searchParams.get('demo') : null
   const demoId = demoParam ? parseInt(demoParam, 10) : null
   const activeScenario = demoId ? DEMO_SCENARIOS.find(s => s.id === demoId) ?? null : null
 

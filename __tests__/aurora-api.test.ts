@@ -77,7 +77,15 @@ describe('GET /api/aurora', () => {
     expect(body.error).toContain('Failed to fetch aurora data')
   })
 
-  describe('demo mode (?demo=N)', () => {
+  describe('demo mode (?demo=N) — dev only', () => {
+    beforeEach(() => {
+      // Demo mode is gated on NODE_ENV=development
+      process.env.NODE_ENV = 'development'
+    })
+    afterEach(() => {
+      process.env.NODE_ENV = 'test'
+    })
+
     it('returns demo scenario 1 (G0/Quiet) without calling NOAA', async () => {
       const res = await GET(makeRequest('http://localhost:3000/api/aurora?demo=1'))
       expect(res.status).toBe(200)
@@ -114,6 +122,15 @@ describe('GET /api/aurora', () => {
       const res = await GET(makeRequest('http://localhost:3000/api/aurora?demo=99'))
       expect(res.status).toBe(200)
       expect(mockGetNOAAData).toHaveBeenCalledTimes(1)
+    })
+
+    it('ignores ?demo param in production (NODE_ENV=production)', async () => {
+      process.env.NODE_ENV = 'production'
+      const res = await GET(makeRequest('http://localhost:3000/api/aurora?demo=4'))
+      // Should fall through to live NOAA fetch, not return mock data
+      expect(mockGetNOAAData).toHaveBeenCalledTimes(1)
+      const body = await res.json()
+      expect(body.isMockData).toBe(false)
     })
   })
 

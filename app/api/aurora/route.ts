@@ -8,8 +8,10 @@ export const revalidate = 0
 
 export async function GET(req: NextRequest) {
   try {
-    // Demo mode: ?demo=1..4 returns a canned scenario for presentations/testing
-    const demoParam = req.nextUrl.searchParams.get('demo')
+    // Demo mode: only available in development — never in production
+    const demoParam = process.env.NODE_ENV === 'development'
+      ? req.nextUrl.searchParams.get('demo')
+      : null
     if (demoParam) {
       const scenario = getScenario(parseInt(demoParam, 10))
       if (scenario) {
