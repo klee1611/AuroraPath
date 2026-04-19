@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { createHash } from 'crypto'
 import type { GreenPathRecommendation } from '@/types/noaa'
 
 const RATE_LIMIT_MS = 5 * 60 * 1000 // 5 minutes
@@ -60,7 +61,11 @@ function gScaleDescription(g: number): string {
 }
 
 function getRateLimitKey(userId: string | null, ip: string): string {
-  return userId ? `user:${userId}` : `ip:${ip}`
+  if (userId) {
+    // Hash userId to avoid storing raw Auth0 sub claims in memory
+    return 'user:' + createHash('sha256').update(userId).digest('hex').slice(0, 16)
+  }
+  return `ip:${ip}`
 }
 
 export function checkRateLimit(userId: string | null, ip: string): { allowed: boolean; waitMs: number } {

@@ -88,8 +88,10 @@ export async function POST(req: NextRequest) {
     const gScale = typeof body.gScale === 'number' ? Math.max(0, Math.min(5, Math.round(body.gScale))) : 0
 
     // Log agent identity for Auth0 for Agents prize requirement
+    // Mask userId to avoid logging raw PII (Auth0 sub) — use first 8 chars only
+    const maskedUserId = userId.slice(0, 8) + '…'
     const { hasIdentity, agentId } = await assertAgentIdentity()
-    console.log(`[GreenPath Agent] Identity: ${agentId} (managed: ${hasIdentity}) | user: ${userId}`)
+    console.log(`[GreenPath Agent] Identity: ${agentId} (managed: ${hasIdentity}) | user: ${maskedUserId}`)
 
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
