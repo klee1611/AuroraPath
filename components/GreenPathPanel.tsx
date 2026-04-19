@@ -222,23 +222,25 @@ export default function GreenPathPanel({
             🔒 Your location is only used for this request and is never stored.
           </p>
 
-          {/* AVS threshold warning */}
-          {auroraData && (auroraData.avs ?? 0) < 30 && (auroraData.avs ?? 0) > 0 && (
-            <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-400 text-left">
-              ⚠️ Aurora activity is currently low (AVS {auroraData.avs}/100). Viewing conditions may not be ideal tonight — but we&apos;ll find the best available spots.
+          {/* AVS threshold warnings */}
+          {auroraData && (auroraData.avs ?? 0) < 10 && (
+            <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400 text-left">
+              🌑 No aurora activity right now (AVS {auroraData.avs}/100). Green Path requires at least minimal aurora activity to be useful — check back when conditions improve.
             </div>
           )}
-          {auroraData && (auroraData.avs ?? 0) === 0 && (
-            <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/30 text-xs text-orange-400 text-left">
-              🌑 No aurora activity detected right now. Gemini will suggest the best dark-sky spots near you for when conditions improve.
+          {auroraData && (auroraData.avs ?? 0) >= 10 && (auroraData.avs ?? 0) < 35 && (
+            <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-400 text-left">
+              ⚠️ Aurora activity is low (AVS {auroraData.avs}/100). Viewing is possible only at very high latitudes — we&apos;ll find the best available spots.
             </div>
           )}
 
           <button
             onClick={requestLocation}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-              bg-aurora-gradient text-aurora-dark font-bold
-              hover:opacity-90 transition-opacity duration-200"
+            disabled={!auroraData || (auroraData.avs ?? 0) < 10}
+            title={(auroraData?.avs ?? 0) < 10 ? 'No aurora activity detected — Green Path is unavailable' : undefined}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity duration-200
+              disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none
+              bg-aurora-gradient text-aurora-dark font-bold hover:opacity-90"
           >
             Get My Green Path 🌿
           </button>
