@@ -78,16 +78,10 @@ export default function AuroraPathDashboardClient() {
     }
   }
 
-  // In demo mode, pre-load the scenario's canned recommendations
-  // Only pre-load if AVS is high enough to warrant Green Path (mirrors the UI gate)
+  // Clear recommendations whenever demo scenario changes (user must click the button)
   useEffect(() => {
-    if (activeScenario && activeScenario.aurora.avs >= 10) {
-      setRecommendations(activeScenario.recommendations)
-      setSelectedRecIndex(null)
-    } else {
-      setRecommendations([])
-      setSelectedRecIndex(null)
-    }
+    setRecommendations([])
+    setSelectedRecIndex(null)
   }, [demoId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -193,6 +187,7 @@ export default function AuroraPathDashboardClient() {
               recommendations={recommendations}
               selectedRecIndex={selectedRecIndex}
               onSelectRec={setSelectedRecIndex}
+              demoRecommendations={(activeScenario?.aurora.avs ?? 0) >= 10 ? activeScenario?.recommendations : undefined}
             />
           </section>
 

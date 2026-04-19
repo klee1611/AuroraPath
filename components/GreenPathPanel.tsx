@@ -10,6 +10,8 @@ interface GreenPathPanelProps {
   recommendations: GreenPathRecommendation[]
   selectedRecIndex: number | null
   onSelectRec: (index: number) => void
+  /** When set, clicking the button uses these canned recs instead of calling the API */
+  demoRecommendations?: GreenPathRecommendation[]
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -86,6 +88,7 @@ export default function GreenPathPanel({
   recommendations,
   selectedRecIndex,
   onSelectRec,
+  demoRecommendations,
 }: GreenPathPanelProps) {
   const { user, isLoading: authLoading } = useUser()
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
@@ -94,6 +97,15 @@ export default function GreenPathPanel({
   const [agentId, setAgentId] = useState<string | null>(null)
 
   async function requestLocation() {
+    // Demo mode: skip geolocation and API call — use canned data with simulated loading
+    if (demoRecommendations) {
+      setLoading(true)
+      setError(null)
+      await new Promise(resolve => setTimeout(resolve, 900))
+      onRecommendations(demoRecommendations)
+      setLoading(false)
+      return
+    }
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.')
       return
