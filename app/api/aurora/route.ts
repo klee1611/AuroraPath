@@ -14,7 +14,13 @@ export async function GET(req: NextRequest) {
       if (scenario) {
         return NextResponse.json(
           { ...scenario.aurora, isMockData: true },
-          { headers: { 'Cache-Control': 'no-store', 'X-Demo-Scenario': scenario.name } }
+          {
+            headers: {
+              'Cache-Control': 'no-store',
+              // Header values must be ASCII — strip non-ASCII chars (e.g. em dashes in names)
+              'X-Demo-Scenario': scenario.name.replace(/[^\x20-\x7E]/g, '-'),
+            },
+          }
         )
       }
     }
