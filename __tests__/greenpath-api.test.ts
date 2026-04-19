@@ -17,6 +17,9 @@ jest.mock('@/lib/gemini', () => ({ getGreenPathRecommendations: mockGetGreenPath
 const mockAssertAgentIdentity = jest.fn()
 jest.mock('@/lib/auth0', () => ({ assertAgentIdentity: mockAssertAgentIdentity }))
 
+const mockCheckAndIncrementQuota = jest.fn()
+jest.mock('@/lib/ratelimit', () => ({ checkAndIncrementQuota: mockCheckAndIncrementQuota }))
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makePostRequest(body: Record<string, unknown>, url = 'http://localhost:3000/api/green-path'): NextRequest {
@@ -41,6 +44,10 @@ describe('POST /api/green-path', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'aurorapath-agent@test' })
+    // Default: quota allowed with 4 remaining
+    mockCheckAndIncrementQuota.mockResolvedValue({
+      allowed: true, remaining: 4, limit: 5, resetAt: new Date(Date.now() + 86400000),
+    })
   })
 
   describe('authentication', () => {
@@ -253,6 +260,61 @@ describe('POST /api/green-path', () => {
       })
       const res = await OPTIONS(req)
       expect(res.headers.get('Access-Control-Allow-Origin')).toBeTruthy()
+    })
+  })
+
+  describe('per-user daily quota', () => {
+    it('returns 429 with reset info when user quota is exhausted', async () => {
+      jest.resetModules()
+      mockGetSession.mockResolvedValue({ user: { sub: 'auth0|quota-user' } })
+      mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
+      mockCheckAndIncrementQuota.mockResolvedValue({
+        allowed: false, remaining: 0, limit: 5, resetAt: new Date('2026-04-20T00:00:00Z'),
+      })
+
+      const { POST } = await import('@/app/api/green-path/route')
+      const res = await POST(makePostRequest(VALID_BODY))
+
+      expect(res.status).toBe(429)
+      const body = await res.json()
+      expect(body.error).toContain('5 Green Path searches')
+      expect(body.remaining).toBe(0)
+      expect(body.resetAt).toBeTruthy()
+    })
+
+    it('returns X-RateLimit-Remaining header on success', async () => {
+      jest.resetModules()
+      mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
+      mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
+      mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
+      mockCheckAndIncrementQuota.mockResolvedValue({
+        allowed: true, remaining: 3, limit: 5, resetAt: new Date(Date.now() + 86400000),
+      })
+
+      const { POST } = await import('@/app/api/green-path/route')
+      const res = await POST(makePostRequest(VALID_BODY))
+
+      expect(res.status).toBe(200)
+      expect(res.headers.get('X-RateLimit-Remaining')).toBe('3')
+      expect(res.headers.get('X-RateLimit-Limit')).toBe('5')
+    })
+
+    it('includes quota info in success response body', async () => {
+      jest.resetModules()
+      mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
+      mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
+      mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
+      mockCheckAndIncrementQuota.mockResolvedValue({
+        allowed: true, remaining: 2, limit: 5, resetAt: new Date(Date.now() + 86400000),
+      })
+
+      const { POST } = await import('@/app/api/green-path/route')
+      const res = await POST(makePostRequest(VALID_BODY))
+      const body = await res.json()
+
+      expect(body.quota).toBeDefined()
+      expect(body.quota.remaining).toBe(2)
+      expect(body.quota.limit).toBe(5)
     })
   })
 })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
 import { getGreenPathRecommendations } from '@/lib/gemini'
 import { assertAgentIdentity } from '@/lib/auth0'
+import { checkAndIncrementQuota } from '@/lib/ratelimit'
 
 export const maxDuration = 30 // Allow up to 30s for Gemini response
 
@@ -52,6 +53,27 @@ export async function POST(req: NextRequest) {
     }
     const userId = session.user.sub as string
 
+    // Per-user daily quota check (Upstash Redis or in-memory fallback)
+    const quota = await checkAndIncrementQuota(userId)
+    const rateLimitHeaders: Record<string, string> = {
+      'X-RateLimit-Limit': String(quota.limit),
+      'X-RateLimit-Remaining': String(quota.remaining),
+      'X-RateLimit-Reset': String(Math.floor(quota.resetAt.getTime() / 1000)),
+    }
+
+    if (!quota.allowed) {
+      const resetTime = quota.resetAt.toUTCString()
+      return NextResponse.json(
+        {
+          error: `You've used all ${quota.limit} Green Path searches for today. Resets at midnight UTC (${resetTime}).`,
+          remaining: 0,
+          resetAt: quota.resetAt.toISOString(),
+          limit: quota.limit,
+        },
+        { status: 429, headers: { ...headers, ...rateLimitHeaders } }
+      )
+    }
+
     const body = (await req.json()) as GreenPathRequest
 
     // Validate and sanitize inputs
@@ -85,8 +107,17 @@ export async function POST(req: NextRequest) {
     )
 
     return NextResponse.json(
-      { recommendations, agentId, generatedAt: new Date().toISOString() },
-      { headers }
+      {
+        recommendations,
+        agentId,
+        generatedAt: new Date().toISOString(),
+        quota: {
+          remaining: quota.remaining,
+          limit: quota.limit,
+          resetAt: quota.resetAt.toISOString(),
+        },
+      },
+      { headers: { ...headers, ...rateLimitHeaders } }
     )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to generate recommendations.'

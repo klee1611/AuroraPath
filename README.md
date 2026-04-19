@@ -102,6 +102,11 @@ Fill in `.env.local`:
 | `AUTH0_M2M_CLIENT_SECRET` | Auth0 → Applications → Machine to Machine |
 | `AUTH0_M2M_AUDIENCE` | `https://YOUR_DOMAIN.auth0.com/api/v2/` |
 | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| `UPSTASH_REDIS_REST_URL` | [Upstash console](https://console.upstash.com) → Redis → REST API |
+| `UPSTASH_REDIS_REST_TOKEN` | [Upstash console](https://console.upstash.com) → Redis → REST API |
+| `DAILY_GEMINI_LIMIT` | Max AI calls per user per day (default: `5`) |
+
+> **Upstash is optional in development.** If not set, an in-memory fallback is used automatically.
 
 ### 3. Auth0 Setup
 

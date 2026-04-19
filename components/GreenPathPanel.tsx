@@ -95,6 +95,7 @@ export default function GreenPathPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [agentId, setAgentId] = useState<string | null>(null)
+  const [quota, setQuota] = useState<{ remaining: number; limit: number; resetAt: string } | null>(null)
 
   async function requestLocation() {
     // Demo mode: skip geolocation and API call — use canned data with simulated loading
@@ -143,7 +144,12 @@ export default function GreenPathPanel({
         return
       }
       if (res.status === 429) {
-        setError(data.error ?? 'Too many requests — please wait a moment and try again.')
+        // Could be per-user daily quota OR Google AI Studio rate limit
+        const msg = data.error ?? 'Too many requests — please wait a moment and try again.'
+        setError(msg)
+        if (data.remaining !== undefined) {
+          setQuota({ remaining: 0, limit: data.limit ?? 5, resetAt: data.resetAt ?? '' })
+        }
         return
       }
       if (res.status === 503) {
@@ -153,6 +159,9 @@ export default function GreenPathPanel({
       if (!res.ok) throw new Error(data.error ?? 'Failed to generate Green Path')
       onRecommendations(data.recommendations)
       setAgentId(data.agentId ?? null)
+      if (data.quota) {
+        setQuota(data.quota)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred.')
     } finally {
@@ -246,6 +255,13 @@ export default function GreenPathPanel({
             </div>
           )}
 
+          {/* Quota soft warning */}
+          {user && quota && quota.remaining <= 1 && quota.remaining > 0 && (
+            <div className="mb-3 mx-auto max-w-sm px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-400 text-left">
+              ⚡ Last search remaining today ({quota.remaining}/{quota.limit}). Resets at midnight UTC.
+            </div>
+          )}
+
           <button
             onClick={requestLocation}
             disabled={!auroraData || (auroraData.avs ?? 0) < 10}
@@ -255,6 +271,11 @@ export default function GreenPathPanel({
               bg-aurora-gradient text-aurora-dark font-bold hover:opacity-90"
           >
             Get My Green Path 🌿
+            {user && quota && (
+              <span className="ml-1 text-xs opacity-70 font-normal">
+                ({quota.remaining}/{quota.limit} left)
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -309,9 +330,13 @@ export default function GreenPathPanel({
           {user && (
             <button
               onClick={requestLocation}
-              className="mt-4 w-full text-xs text-gray-500 hover:text-gray-300 py-2 border border-dashed border-aurora-border rounded-lg transition-colors"
+              disabled={quota?.remaining === 0}
+              title={quota?.remaining === 0 ? 'Daily quota reached — resets at midnight UTC' : undefined}
+              className="mt-4 w-full text-xs text-gray-500 hover:text-gray-300 py-2 border border-dashed border-aurora-border rounded-lg transition-colors
+                disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
             >
               ↻ Regenerate Green Path
+              {quota && <span className="ml-1 opacity-60">({quota.remaining}/{quota.limit} left today)</span>}
             </button>
           )}
         </>
