@@ -1,0 +1,302 @@
+'use client'
+
+import { useState } from 'react'
+import type { GreenPathRecommendation, AuroraAPIResponse } from '@/types/noaa'
+import { useUser } from '@auth0/nextjs-auth0/client'
+
+interface GreenPathPanelProps {
+  auroraData: AuroraAPIResponse | null
+  onRecommendations: (recs: GreenPathRecommendation[]) => void
+  recommendations: GreenPathRecommendation[]
+  selectedRecIndex: number | null
+  onSelectRec: (index: number) => void
+}
+
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <span className="text-xs">
+      {Array.from({ length: 5 }, (_, i) => (
+        <span key={i} style={{ color: i < rating ? '#f59e0b' : '#374151' }}>★</span>
+      ))}
+    </span>
+  )
+}
+
+function RecommendationCard({
+  rec,
+  index,
+  selected,
+  onSelect,
+}: {
+  rec: GreenPathRecommendation
+  index: number
+  selected: boolean
+  onSelect: () => void
+}) {
+  const gradients = [
+    'from-aurora-green/10 to-aurora-teal/5',
+    'from-aurora-teal/10 to-aurora-purple/5',
+    'from-aurora-purple/10 to-aurora-pink/5',
+  ]
+
+  return (
+    <button
+      onClick={onSelect}
+      className={`w-full text-left bg-gradient-to-br ${gradients[index % 3]} border rounded-xl p-4 transition-all duration-300 cursor-pointer
+        ${selected
+          ? 'border-aurora-green shadow-lg shadow-aurora-green/20 ring-1 ring-aurora-green/40'
+          : 'border-aurora-border hover:border-aurora-green/50 hover:shadow-md hover:shadow-aurora-green/10'
+        }`}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold transition-colors
+              ${selected ? 'bg-aurora-green text-aurora-dark' : 'bg-aurora-green/20 text-aurora-green'}`}>
+              {index + 1}
+            </span>
+            <h3 className="font-semibold text-white text-sm">{rec.name}</h3>
+            {selected && <span className="text-xs text-aurora-green">📍 on map</span>}
+          </div>
+          <StarRating rating={rec.darkSkyRating} />
+        </div>
+        <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{rec.distanceKm} km</span>
+      </div>
+
+      <p className="text-xs text-gray-400 leading-relaxed mb-3">{rec.description}</p>
+
+      <div className="flex flex-wrap gap-2">
+        <span className="flex items-center gap-1 text-xs bg-aurora-green/10 text-aurora-green border border-aurora-green/20 px-2 py-1 rounded-full">
+          🌿 {rec.carbonSavedKg} kg CO₂ saved
+        </span>
+        <span className="flex items-center gap-1 text-xs bg-aurora-purple/10 text-aurora-purple border border-aurora-purple/20 px-2 py-1 rounded-full">
+          🚌 {rec.transitOption}
+        </span>
+        <span className="flex items-center gap-1 text-xs bg-aurora-teal/10 text-aurora-teal border border-aurora-teal/20 px-2 py-1 rounded-full">
+          🕐 Best at {rec.bestHour} UTC
+        </span>
+      </div>
+    </button>
+  )
+}
+
+export default function GreenPathPanel({
+  auroraData,
+  onRecommendations,
+  recommendations,
+  selectedRecIndex,
+  onSelectRec,
+}: GreenPathPanelProps) {
+  const { user, isLoading: authLoading } = useUser()
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [agentId, setAgentId] = useState<string | null>(null)
+
+  async function requestLocation() {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser.')
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        fetchGreenPath(pos.coords.latitude, pos.coords.longitude)
+      },
+      () => setError('Location access denied. Please allow location access to get personalized recommendations.')
+    )
+  }
+
+  async function fetchGreenPath(lat: number, lng: number) {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const region = await getRegionName(lat, lng)
+      const res = await fetch('/api/green-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat, lng, region,
+          avs: auroraData?.avs ?? 0,
+          gScale: auroraData?.gScale ?? 0,
+          // userId is extracted server-side from Auth0 session — not sent from client
+        }),
+      })
+
+      const data = await res.json()
+      if (res.status === 401) {
+        // Session expired or not logged in — prompt login rather than showing generic error
+        setError('Please log in to generate your personalised Green Path.')
+        return
+      }
+      if (res.status === 429) {
+        setError(data.error ?? 'Too many requests — please wait a moment and try again.')
+        return
+      }
+      if (res.status === 503) {
+        setError(data.error ?? 'AI service is temporarily busy. Please try again in a few seconds.')
+        return
+      }
+      if (!res.ok) throw new Error(data.error ?? 'Failed to generate Green Path')
+      onRecommendations(data.recommendations)
+      setAgentId(data.agentId ?? null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function getRegionName(lat: number, lng: number): Promise<string> {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { headers: { 'User-Agent': 'AuroraPath/1.0 (Earth Day Hackathon 2026)' } }
+      )
+      const data = await res.json()
+      return data.address?.state ?? data.address?.country ?? `${lat.toFixed(1)}°N, ${lng.toFixed(1)}°E`
+    } catch {
+      return `${lat.toFixed(1)}°N, ${lng.toFixed(1)}°E`
+    }
+  }
+
+  // Loading state
+  if (authLoading) {
+    return (
+      <div className="bg-aurora-card border border-aurora-border rounded-2xl p-6">
+        <div className="skeleton h-4 w-32 mb-4" />
+        <div className="skeleton h-24 w-full" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-aurora-card border border-aurora-border rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+            🌿 Green Path AI
+          </h2>
+          <span className="text-xs text-gray-600">powered by Gemini</span>
+        </div>
+        {agentId && (
+          <span className="text-xs text-gray-600 font-mono truncate max-w-[160px]" title={`Agent: ${agentId}`}>
+            🔐 Agent: {agentId.slice(0, 16)}…
+          </span>
+        )}
+      </div>
+
+      {/* Not logged in */}
+      {!user && recommendations.length === 0 && (
+        <div className="text-center py-8">
+          <div className="text-4xl mb-3">🌌</div>
+          <h3 className="text-sm font-semibold text-gray-300 mb-2">
+            Sign in for Personalized Green Paths
+          </h3>
+          <p className="text-xs text-gray-500 mb-4 max-w-sm mx-auto">
+            Get AI-powered sustainable travel recommendations to the best aurora viewing spots near you.
+          </p>
+          <a
+            href="/api/auth/login"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+              bg-aurora-green/10 text-aurora-green border border-aurora-green/30
+              hover:bg-aurora-green/20 transition-all duration-200"
+          >
+            Sign in to unlock Green Path →
+          </a>
+        </div>
+      )}
+
+      {/* Logged in, no location yet */}
+      {user && recommendations.length === 0 && !loading && (
+        <div className="text-center py-6">
+          <div className="text-3xl mb-3">📍</div>
+          <h3 className="text-sm font-semibold text-gray-300 mb-1">
+            Welcome, {user.name?.split(' ')[0]}!
+          </h3>
+          <p className="text-xs text-gray-500 mb-1 max-w-sm mx-auto">
+            Share your location to get 3 sustainable aurora viewing recommendations from our AI agent.
+          </p>
+          <p className="text-xs text-gray-600 mb-4">
+            🔒 Your location is only used for this request and is never stored.
+          </p>
+
+          {/* AVS threshold warning */}
+          {auroraData && (auroraData.avs ?? 0) < 30 && (auroraData.avs ?? 0) > 0 && (
+            <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-400 text-left">
+              ⚠️ Aurora activity is currently low (AVS {auroraData.avs}/100). Viewing conditions may not be ideal tonight — but we&apos;ll find the best available spots.
+            </div>
+          )}
+          {auroraData && (auroraData.avs ?? 0) === 0 && (
+            <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/30 text-xs text-orange-400 text-left">
+              🌑 No aurora activity detected right now. Gemini will suggest the best dark-sky spots near you for when conditions improve.
+            </div>
+          )}
+
+          <button
+            onClick={requestLocation}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+              bg-aurora-gradient text-aurora-dark font-bold
+              hover:opacity-90 transition-opacity duration-200"
+          >
+            Get My Green Path 🌿
+          </button>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 text-sm text-aurora-green mb-4">
+            <div className="w-4 h-4 border-2 border-aurora-green border-t-transparent rounded-full animate-spin" />
+            GreenPath agent is finding your sustainable viewing spots…
+          </div>
+          {[0, 1, 2].map(i => (
+            <div key={i} className="skeleton h-28 w-full" style={{ animationDelay: `${i * 0.2}s` }} />
+          ))}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
+          <p className="text-sm text-red-400">{error}</p>
+          {user && location && (
+            <button
+              onClick={() => fetchGreenPath(location.lat, location.lng)}
+              className="mt-2 text-xs text-red-400 hover:text-red-300 underline"
+            >
+              Try again
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Recommendations */}
+      {recommendations.length > 0 && !loading && (
+        <>
+          <div className="space-y-3">
+            {recommendations.map((rec, i) => (
+              <RecommendationCard
+                key={i}
+                rec={rec}
+                index={i}
+                selected={selectedRecIndex === i}
+                onSelect={() => onSelectRec(i)}
+              />
+            ))}
+          </div>
+          {user && (
+            <button
+              onClick={requestLocation}
+              className="mt-4 w-full text-xs text-gray-500 hover:text-gray-300 py-2 border border-dashed border-aurora-border rounded-lg transition-colors"
+            >
+              ↻ Regenerate Green Path
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
