@@ -171,12 +171,10 @@ export default function GreenPathPanel({
 
   async function getRegionName(lat: number, lng: number): Promise<string> {
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-        { headers: { 'User-Agent': 'AuroraPath/1.0 (Earth Day Hackathon 2026)' } }
-      )
+      // Use server-side proxy to avoid sending raw GPS coordinates to a third-party
+      const res = await fetch(`/api/geocode?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`)
       const data = await res.json()
-      return data.address?.state ?? data.address?.country ?? `${lat.toFixed(1)}°N, ${lng.toFixed(1)}°E`
+      return data.region ?? `${lat.toFixed(1)}°N, ${lng.toFixed(1)}°E`
     } catch {
       return `${lat.toFixed(1)}°N, ${lng.toFixed(1)}°E`
     }

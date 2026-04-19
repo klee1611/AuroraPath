@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     // Require an authenticated Auth0 session — prevents anonymous Gemini API spend
     const session = await getSession()
     if (!session?.user) {
+      console.warn('[Security] Unauthenticated request to /api/green-path rejected (401)')
       return NextResponse.json(
         { error: 'Authentication required to generate Green Path recommendations.' },
         { status: 401, headers }
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
 
     if (!quota.allowed) {
       const resetTime = quota.resetAt.toUTCString()
+      console.warn(`[Security] Quota exhausted for user ${userId.slice(0, 8)}… — 429 returned`)
       return NextResponse.json(
         {
           error: `You've used all ${quota.limit} Green Path searches for today. Resets at midnight UTC (${resetTime}).`,
