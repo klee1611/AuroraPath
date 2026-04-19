@@ -276,10 +276,15 @@ export default function GreenPathPanel({
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
           <p className="text-sm text-red-400">{error}</p>
+          {/quota|rate.?limit|capacity|429|503/i.test(error) && (
+            <p className="mt-2 text-xs text-red-300/70">
+              ℹ️ AuroraPath runs on the <strong>Google AI Studio free tier</strong> — it has a limited request quota shared across all visitors. This is a hackathon demo project, not a production service. Please wait a minute and try again.
+            </p>
+          )}
           {user && location && (
             <button
               onClick={() => fetchGreenPath(location.lat, location.lng)}
-              className="mt-2 text-xs text-red-400 hover:text-red-300 underline"
+              className="mt-3 text-xs text-red-400 hover:text-red-300 underline"
             >
               Try again
             </button>
@@ -311,6 +316,20 @@ export default function GreenPathPanel({
           )}
         </>
       )}
+
+      {/* Hackathon free-tier notice */}
+      <p className="mt-4 text-center text-[10px] text-gray-600 leading-relaxed">
+        🏆 Hackathon project · AI powered by{' '}
+        <a
+          href="https://aistudio.google.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-gray-400 transition-colors"
+        >
+          Google AI Studio
+        </a>{' '}
+        free tier — AI features may be temporarily unavailable during high demand.
+      </p>
     </div>
   )
 }
