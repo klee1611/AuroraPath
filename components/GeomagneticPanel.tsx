@@ -1,6 +1,7 @@
 'use client'
 
 import type { AuroraAPIResponse } from '@/types/noaa'
+import { useTranslation } from '@/contexts/LanguageContext'
 
 interface ScaleCardProps {
   label: string
@@ -13,6 +14,7 @@ interface ScaleCardProps {
   color: string
   icon: React.ReactNode
   loading?: boolean
+  forecastLabel: string
 }
 
 const SCALE_COLORS: Record<number, string> = {
@@ -42,7 +44,7 @@ function ScaleBars({ scale, max }: { scale: number; max: number }) {
 
 function ScaleCard({
   label, description, currentScale, currentText, forecastScale, forecastText,
-  maxScale, icon, loading,
+  maxScale, icon, loading, forecastLabel,
 }: ScaleCardProps) {
   const color = getScaleColor(currentScale)
 
@@ -91,7 +93,7 @@ function ScaleCard({
       {forecastScale !== currentScale && (
         <div className="mt-3 pt-3 border-t border-aurora-border">
           <span className="text-xs text-gray-500">
-            24h forecast:{' '}
+            {forecastLabel}:{' '}
             <span style={{ color: getScaleColor(forecastScale) }}>
               {label.charAt(0)}{forecastScale} — {forecastText}
             </span>
@@ -108,75 +110,93 @@ interface GeomagneticPanelProps {
 }
 
 export default function GeomagneticPanel({ data, loading }: GeomagneticPanelProps) {
+  const { t, locale } = useTranslation()
+
+  const scales = [
+    {
+      key: 'Geomagnetic',
+      icon: '🌍',
+      currentScale: data?.gScale ?? 0,
+      currentText: data?.gText ?? 'none',
+      forecastScale: data?.forecast24h.g ?? 0,
+      forecastText: data?.forecast24h.text ?? 'none',
+      maxScale: 5,
+    },
+    {
+      key: 'Radio Blackout',
+      icon: '📡',
+      currentScale: data?.rScale ?? 0,
+      currentText: data?.rScale === 0 ? 'none' : `R${data?.rScale}`,
+      forecastScale: data?.rScale ?? 0,
+      forecastText: data?.rScale === 0 ? 'none' : `R${data?.rScale}`,
+      maxScale: 5,
+    },
+    {
+      key: 'Solar Radiation',
+      icon: '☀️',
+      currentScale: data?.sScale ?? 0,
+      currentText: data?.sScale === 0 ? 'none' : `S${data?.sScale}`,
+      forecastScale: data?.sScale ?? 0,
+      forecastText: data?.sScale === 0 ? 'none' : `S${data?.sScale}`,
+      maxScale: 5,
+    },
+  ]
+
+  // Localized scale labels
+  const scaleLabels: Record<string, string> = {
+    Geomagnetic: locale === 'zh-TW' ? '地磁' : 'Geomagnetic',
+    'Radio Blackout': locale === 'zh-TW' ? '無線電中斷' : 'Radio Blackout',
+    'Solar Radiation': locale === 'zh-TW' ? '太陽輻射' : 'Solar Radiation',
+  }
+
   return (
     <div className="bg-aurora-card border border-aurora-border rounded-2xl p-6">
       <div className="flex items-center gap-2 mb-4">
         <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-          NOAA Space Weather
+          {t.spaceWeatherTitle}
         </h2>
         {data && !loading && (
           <span className="text-xs text-gray-600">
-            — {new Date(data.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} UTC
+            — {new Date(data.timestamp).toLocaleTimeString(locale === 'zh-TW' ? 'zh-TW' : 'en-US', { hour: '2-digit', minute: '2-digit' })} UTC
           </span>
         )}
       </div>
 
       <div className="grid gap-3">
-        <ScaleCard
-          label="Geomagnetic"
-          description="G-scale measures disturbances in Earth's magnetic field. G3+ produces aurora at mid-latitudes (≥50°N)."
-          currentScale={data?.gScale ?? 0}
-          currentText={data?.gText ?? 'none'}
-          forecastScale={data?.forecast24h.g ?? 0}
-          forecastText={data?.forecast24h.text ?? 'none'}
-          maxScale={5}
-          color={getScaleColor(data?.gScale ?? 0)}
-          icon="🌍"
-          loading={loading}
-        />
-        <ScaleCard
-          label="Radio Blackout"
-          description="R-scale measures solar radio bursts. Affects HF communications; indirectly signals aurora potential."
-          currentScale={data?.rScale ?? 0}
-          currentText={data?.rScale === 0 ? 'none' : `R${data?.rScale}`}
-          forecastScale={data?.rScale ?? 0}
-          forecastText={data?.rScale === 0 ? 'none' : `R${data?.rScale}`}
-          maxScale={5}
-          color={getScaleColor(data?.rScale ?? 0)}
-          icon="📡"
-          loading={loading}
-        />
-        <ScaleCard
-          label="Solar Radiation"
-          description="S-scale measures solar energetic particle events. S2+ may affect satellite operations."
-          currentScale={data?.sScale ?? 0}
-          currentText={data?.sScale === 0 ? 'none' : `S${data?.sScale}`}
-          forecastScale={data?.sScale ?? 0}
-          forecastText={data?.sScale === 0 ? 'none' : `S${data?.sScale}`}
-          maxScale={5}
-          color={getScaleColor(data?.sScale ?? 0)}
-          icon="☀️"
-          loading={loading}
-        />
+        {scales.map(s => (
+          <ScaleCard
+            key={s.key}
+            label={scaleLabels[s.key]}
+            description={t.scaleDesc[s.key]}
+            currentScale={s.currentScale}
+            currentText={s.currentText}
+            forecastScale={s.forecastScale}
+            forecastText={s.forecastText}
+            maxScale={s.maxScale}
+            color={getScaleColor(s.currentScale)}
+            icon={s.icon}
+            loading={loading}
+            forecastLabel={t.forecastLabel}
+          />
+        ))}
       </div>
 
-      {/* Solar wind strip */}
       {(loading || data?.windSpeed) && (
         <div className="mt-4 pt-4 border-t border-aurora-border">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-500 flex items-center gap-1.5">
-              🌬️ Solar wind
+              🌬️ {t.solarWind}
             </span>
             {loading ? (
               <div className="skeleton h-4 w-24" />
             ) : (
               <div className="flex gap-4 text-xs">
                 <span>
-                  <span className="text-gray-500">Speed </span>
+                  <span className="text-gray-500">{t.speed} </span>
                   <span className="font-mono text-aurora-teal">{data?.windSpeed?.toFixed(0)} km/s</span>
                 </span>
                 <span>
-                  <span className="text-gray-500">Density </span>
+                  <span className="text-gray-500">{t.density} </span>
                   <span className="font-mono text-aurora-purple">{data?.windDensity?.toFixed(1)} p/cm³</span>
                 </span>
               </div>

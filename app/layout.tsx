@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { UserProvider } from '@auth0/nextjs-auth0/client'
+import { LanguageProvider } from '@/contexts/LanguageContext'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
@@ -20,7 +21,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className={`${inter.variable} font-sans bg-aurora-dark text-white antialiased min-h-screen`}>
         {/* UserProvider at root so all pages have Auth0 context without forcing client rendering */}
-        <UserProvider>{children}</UserProvider>
+        <UserProvider>
+          <LanguageProvider>{children}</LanguageProvider>
+        </UserProvider>
       </body>
     </html>
   )

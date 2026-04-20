@@ -9,6 +9,7 @@ import DashboardHeader from '@/components/DashboardHeader'
 import AVSGauge from '@/components/AVSGauge'
 import GeomagneticPanel from '@/components/GeomagneticPanel'
 import GreenPathPanel from '@/components/GreenPathPanel'
+import { useTranslation } from '@/contexts/LanguageContext'
 
 // Dynamic import for map (avoids SSR/Leaflet window issues)
 const AuroraMap = dynamic(() => import('@/components/AuroraMap'), {
@@ -22,13 +23,13 @@ const AuroraMap = dynamic(() => import('@/components/AuroraMap'), {
     </div>
   ),
 })
-
 const POLL_INTERVAL_MS = 30_000
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
 export default function AuroraPathDashboardClient() {
   const searchParams = useSearchParams()
+  const { t } = useTranslation()
   // Demo mode is dev-only — ignore ?demo param in production
   const demoParam = IS_DEV ? searchParams.get('demo') : null
   const demoId = demoParam ? parseInt(demoParam, 10) : null
@@ -99,14 +100,14 @@ export default function AuroraPathDashboardClient() {
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3">
               <span className="text-red-400">⚠️</span>
               <div>
-                <p className="text-sm text-red-400 font-medium">Connection issue</p>
+                <p className="text-sm text-red-400 font-medium">{t.connectionIssue}</p>
                 <p className="text-xs text-red-400/70 mt-0.5">{error}</p>
               </div>
               <button
                 onClick={fetchAuroraData}
                 className="ml-auto text-xs text-red-400 hover:text-red-300 border border-red-400/30 px-3 py-1 rounded-lg"
               >
-                Retry
+                {t.retry}
               </button>
             </div>
           )}
@@ -114,7 +115,7 @@ export default function AuroraPathDashboardClient() {
           {/* Demo mode banner */}
           {activeScenario && (
             <div className="bg-aurora-purple/10 border border-aurora-purple/40 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
-              <span className="text-aurora-purple text-sm font-semibold">🎬 Demo Mode</span>
+              <span className="text-aurora-purple text-sm font-semibold">{t.demoMode}</span>
               <span className="text-xs text-gray-400">{activeScenario.name} — {activeScenario.description}</span>
               <div className="flex gap-2 ml-auto flex-wrap">
                 {DEMO_SCENARIOS.map(s => (
@@ -131,7 +132,7 @@ export default function AuroraPathDashboardClient() {
                   </a>
                 ))}
                 <a href="/" className="text-xs px-2 py-1 rounded-lg border border-aurora-green/40 text-aurora-green hover:bg-aurora-green/10 transition-colors">
-                  Live ↗
+                  {t.liveLink}
                 </a>
               </div>
             </div>
@@ -141,7 +142,7 @@ export default function AuroraPathDashboardClient() {
             <div className="flex justify-end">
               <details className="group">
                 <summary className="text-xs text-gray-700 hover:text-gray-500 cursor-pointer select-none list-none">
-                  🎬 Demo mode
+                  {t.demoModeToggle}
                 </summary>
                 <div className="absolute right-4 mt-1 flex gap-2 bg-aurora-card border border-aurora-border rounded-lg px-3 py-2 shadow-lg z-10">
                   {DEMO_SCENARIOS.map(s => (
@@ -196,23 +197,23 @@ export default function AuroraPathDashboardClient() {
           {/* Earth Day footer */}
           <footer className="text-center py-8 border-t border-aurora-border">
             <p className="text-sm text-gray-500">
-              🌍 Built for{' '}
+              🌍 {t.earthDayBuilt}{' '}
               <a
                 href="https://dev.to/challenges/weekend-2026-04-16"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-aurora-green hover:underline"
               >
-                Earth Day Weekend Challenge 2026
+                {t.earthDayChallenge}
               </a>
             </p>
             <p className="text-xs text-gray-700 mt-1">
-              Space weather data from{' '}
+              {t.dataFrom}{' '}
               <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener noreferrer"
                 className="hover:text-gray-500 underline">
                 NOAA SWPC
               </a>
-              {' '}· AI powered by Google Gemini · Auth by Auth0 · Map tiles by Stadia Maps
+              {' '}· {t.aiPowered} · {t.authBy} · {t.mapTiles}
             </p>
           </footer>
         </main>
