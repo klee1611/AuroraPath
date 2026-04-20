@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useUser } from '@auth0/nextjs-auth0/client'
 import { useTranslation } from '@/contexts/LanguageContext'
 import { LOCALES, type Locale } from '@/lib/i18n'
@@ -14,10 +15,16 @@ export default function DashboardHeader({ avs, lastUpdated, isMockData }: Dashbo
   const { user, isLoading } = useUser()
   const { locale, setLocale, t } = useTranslation()
 
-  // Preserve the current query string (e.g. ?demo=1) after Auth0 redirects back
-  const loginHref = typeof window !== 'undefined' && window.location.search
-    ? `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`
-    : '/api/auth/login'
+  // Preserve the current query string (e.g. ?demo=1) after Auth0 redirects back.
+  // Must use useState+useEffect to avoid SSR/client hydration mismatch.
+  const [loginHref, setLoginHref] = useState('/api/auth/login')
+  useEffect(() => {
+    if (window.location.search) {
+      setLoginHref(
+        `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`
+      )
+    }
+  }, [])
 
   const formattedTime = lastUpdated
     ? new Date(lastUpdated).toLocaleTimeString(locale === 'zh-TW' ? 'zh-TW' : 'en-US', {
