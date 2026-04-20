@@ -49,27 +49,16 @@ AVS = (G-Scale/5 × 65) + (max(windSpeed - 300, 0)/500 × 25) + forecastBonus
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────────────────────────────┐
-│              Next.js 14 (Vercel)            │
-│                                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │ /api/    │  │ /api/    │  │ Auth0    │  │
-│  │ aurora   │  │green-path│  │ handler  │  │
-│  │ (NOAA+  │  │ (Gemini  │  │          │  │
-│  │  AVS)   │  │  agent)  │  │          │  │
-│  └────┬─────┘  └────┬─────┘  └──────────┘  │
-│       │             │                       │
-│  ┌────▼─────────────▼─────────────────────┐ │
-│  │  React Dashboard                       │ │
-│  │  AVSGauge · GeomagneticPanel           │ │
-│  │  AuroraMap · GreenPathPanel            │ │
-│  └────────────────────────────────────────┘ │
-└─────────────────────────────────────────────┘
-         │                    │
-   NOAA SWPC APIs      Google Gemini 1.5 Flash
-                        (via Auth0 M2M identity)
-```
+![AuroraPath Architecture](public/architecture.png)
+
+The system uses a two-layer identity model:
+- **Regular Web App** (Auth0) — authenticates end users via Universal Login
+- **Machine-to-Machine App** (Auth0) — gives the Gemini AI agent a managed, auditable identity separate from any user
+
+Key data flows:
+- `GET /api/aurora` — public endpoint, NOAA ingestion + AVS computation, 30 req/min IP rate limit
+- `GET /api/geocode` — server-side Nominatim proxy (hides user GPS coordinates from third parties)
+- `POST /api/green-path` — requires Auth0 session cookie; verifies identity, checks/increments Upstash Redis quota, calls Gemini with M2M token
 
 ---
 
