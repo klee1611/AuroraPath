@@ -88,3 +88,52 @@ export async function checkAndIncrementQuota(userId: string): Promise<QuotaResul
     limit: DAILY_LIMIT,
   };
 }
+
+/**
+ * Read-only quota check — does NOT increment the counter.
+ * Use this to gate access; call incrementQuota() only after a successful response.
+ */
+export async function checkQuota(userId: string): Promise<QuotaResult> {
+  const date = utcDateString();
+  const hashedId = hashUserId(userId);
+  const resetAt = nextMidnightUTC();
+
+  const redis = getUpstashClient();
+
+  if (redis) {
+    const key = `ratelimit:${hashedId}:${date}`;
+    const raw = await redis.get<number>(key);
+    const count = raw ?? 0;
+    const allowed = count < DAILY_LIMIT;
+    return {
+      allowed,
+      remaining: Math.max(0, DAILY_LIMIT - count),
+      resetAt,
+      limit: DAILY_LIMIT,
+    };
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('[ratelimit] UPSTASH_REDIS_REST_URL not set — using in-memory fallback in production!');
+  }
+
+  const entry = inMemoryStore.get(hashedId);
+  if (!entry || entry.date !== date) {
+    return { allowed: true, remaining: DAILY_LIMIT, resetAt, limit: DAILY_LIMIT };
+  }
+  const allowed = entry.count < DAILY_LIMIT;
+  return {
+    allowed,
+    remaining: Math.max(0, DAILY_LIMIT - entry.count),
+    resetAt,
+    limit: DAILY_LIMIT,
+  };
+}
+
+/**
+ * Increment-only — call after a successful AI response to record the spend.
+ * Returns the updated QuotaResult.
+ */
+export async function incrementQuota(userId: string): Promise<QuotaResult> {
+  return checkAndIncrementQuota(userId);
+}

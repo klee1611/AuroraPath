@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@auth0/nextjs-auth0'
 import { getGreenPathRecommendations } from '@/lib/gemini'
 import { assertAgentIdentity } from '@/lib/auth0'
-import { checkAndIncrementQuota } from '@/lib/ratelimit'
+import { checkQuota, incrementQuota } from '@/lib/ratelimit'
 
 export const maxDuration = 30 // Allow up to 30s for Gemini response
 
@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
     }
     const userId = session.user.sub as string
 
-    // Per-user daily quota check (Upstash Redis or in-memory fallback)
-    const quota = await checkAndIncrementQuota(userId)
+    // Per-user daily quota check — read-only, does NOT consume the call yet
+    const quota = await checkQuota(userId)
     const rateLimitHeaders: Record<string, string> = {
       'X-RateLimit-Limit': String(quota.limit),
       'X-RateLimit-Remaining': String(quota.remaining),
@@ -110,15 +110,18 @@ export async function POST(req: NextRequest) {
       ip
     )
 
+    // Gemini succeeded — now record the spend against the user's daily quota
+    const updatedQuota = await incrementQuota(userId)
+
     return NextResponse.json(
       {
         recommendations,
         agentId,
         generatedAt: new Date().toISOString(),
         quota: {
-          remaining: quota.remaining,
-          limit: quota.limit,
-          resetAt: quota.resetAt.toISOString(),
+          remaining: updatedQuota.remaining,
+          limit: updatedQuota.limit,
+          resetAt: updatedQuota.resetAt.toISOString(),
         },
       },
       { headers: { ...headers, ...rateLimitHeaders } }

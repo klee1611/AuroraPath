@@ -18,7 +18,13 @@ const mockAssertAgentIdentity = jest.fn()
 jest.mock('@/lib/auth0', () => ({ assertAgentIdentity: mockAssertAgentIdentity }))
 
 const mockCheckAndIncrementQuota = jest.fn()
-jest.mock('@/lib/ratelimit', () => ({ checkAndIncrementQuota: mockCheckAndIncrementQuota }))
+const mockCheckQuota = jest.fn()
+const mockIncrementQuota = jest.fn()
+jest.mock('@/lib/ratelimit', () => ({
+  checkAndIncrementQuota: mockCheckAndIncrementQuota,
+  checkQuota: mockCheckQuota,
+  incrementQuota: mockIncrementQuota,
+}))
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -44,10 +50,10 @@ describe('POST /api/green-path', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'aurorapath-agent@test' })
-    // Default: quota allowed with 4 remaining
-    mockCheckAndIncrementQuota.mockResolvedValue({
-      allowed: true, remaining: 4, limit: 5, resetAt: new Date(Date.now() + 86400000),
-    })
+    // Default: quota allowed with 4 remaining (check returns allowed; increment returns updated)
+    const defaultQuota = { allowed: true, remaining: 4, limit: 5, resetAt: new Date(Date.now() + 86400000) }
+    mockCheckQuota.mockResolvedValue(defaultQuota)
+    mockIncrementQuota.mockResolvedValue(defaultQuota)
   })
 
   describe('authentication', () => {
@@ -268,7 +274,7 @@ describe('POST /api/green-path', () => {
       jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|quota-user' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
-      mockCheckAndIncrementQuota.mockResolvedValue({
+      mockCheckQuota.mockResolvedValue({
         allowed: false, remaining: 0, limit: 5, resetAt: new Date('2026-04-20T00:00:00Z'),
       })
 
@@ -287,7 +293,10 @@ describe('POST /api/green-path', () => {
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
-      mockCheckAndIncrementQuota.mockResolvedValue({
+      mockCheckQuota.mockResolvedValue({
+        allowed: true, remaining: 3, limit: 5, resetAt: new Date(Date.now() + 86400000),
+      })
+      mockIncrementQuota.mockResolvedValue({
         allowed: true, remaining: 3, limit: 5, resetAt: new Date(Date.now() + 86400000),
       })
 
@@ -304,7 +313,10 @@ describe('POST /api/green-path', () => {
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
-      mockCheckAndIncrementQuota.mockResolvedValue({
+      mockCheckQuota.mockResolvedValue({
+        allowed: true, remaining: 4, limit: 5, resetAt: new Date(Date.now() + 86400000),
+      })
+      mockIncrementQuota.mockResolvedValue({
         allowed: true, remaining: 2, limit: 5, resetAt: new Date(Date.now() + 86400000),
       })
 
