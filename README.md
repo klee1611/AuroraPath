@@ -125,10 +125,17 @@ Update Auth0 callback/logout URLs to your Vercel domain.
 | Styling | Tailwind CSS |
 | Map | react-leaflet + Stadia Maps |
 | Charts | Recharts |
-| AI | Google Gemini 1.5 Flash |
+| AI | Google Gemini 3.1 Flash |
 | Auth | Auth0 (SPA + M2M) |
+| Cache / Quota | Upstash Redis |
 | Data | NOAA Space Weather Prediction Center |
 | Deploy | Vercel |
+
+---
+
+## 🎬 Demo
+
+<video src="public/Aurora_Path_User_Guide.mp4" controls width="100%"></video>
 
 ---
 
