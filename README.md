@@ -19,16 +19,6 @@
 
 ---
 
-## 🏆 Prize Categories
-
-| Category | Implementation |
-|----------|---------------|
-| **Auth0 for Agents** | The Gemini AI agent uses Auth0 M2M (machine-to-machine) credentials — a managed identity separate from user auth |
-| **Google Gemini** | Gemini 1.5 Flash generates location-aware Green Path recommendations as structured JSON |
-| **GitHub Copilot** | Built with GitHub Copilot CLI throughout |
-
----
-
 ## 🧬 Aurora Visibility Score (AVS)
 
 An empirical model based on NOAA space weather indices:
