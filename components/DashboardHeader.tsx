@@ -14,6 +14,11 @@ export default function DashboardHeader({ avs, lastUpdated, isMockData }: Dashbo
   const { user, isLoading } = useUser()
   const { locale, setLocale, t } = useTranslation()
 
+  // Preserve the current query string (e.g. ?demo=1) after Auth0 redirects back
+  const loginHref = typeof window !== 'undefined' && window.location.search
+    ? `/api/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`
+    : '/api/auth/login'
+
   const formattedTime = lastUpdated
     ? new Date(lastUpdated).toLocaleTimeString(locale === 'zh-TW' ? 'zh-TW' : 'en-US', {
         hour: '2-digit',
@@ -120,7 +125,7 @@ export default function DashboardHeader({ avs, lastUpdated, isMockData }: Dashbo
             </div>
           ) : (
             <a
-              href="/api/auth/login"
+              href={loginHref}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium
                 bg-aurora-green/10 text-aurora-green border border-aurora-green/30
                 hover:bg-aurora-green/20 transition-all duration-200"
