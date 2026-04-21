@@ -5,17 +5,27 @@
 > A real-time, carbon-optimized dashboard for aurora borealis sightings.
 > Built for the [dev.to Earth Day Weekend Challenge](https://dev.to/challenges/weekend-2026-04-16).
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_REPO)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/klee1611/AuroraPath)
 
 ---
 
-## ✨ What It Does
+## 🌍 What Is AuroraPath?
+
+AuroraPath connects people with Earth's most spectacular natural phenomenon — the aurora borealis — while promoting sustainable travel. Instead of jumping in a car and driving to a dark-sky spot, AuroraPath shows you the best eco-friendly routes: public transit, carpooling, and low-carbon options, each with real CO₂ savings so you can chase the lights and tread lightly on the planet.
 
 **AuroraPath** combines live NOAA space weather data with Google Gemini AI to help you:
 
 1. **Track real-time aurora activity** — Aurora Visibility Score (AVS), G/R/S-scale meters, solar wind speed
 2. **See where auroras are visible** — Interactive map with latitude visibility bands that update with geomagnetic conditions
 3. **Find sustainable viewing routes** — AI-generated "Green Path" recommendations with carbon savings, public transit options, and dark-sky ratings
+
+---
+
+## 🎬 Demo
+
+<video src="https://github.com/klee1611/AuroraPath/raw/main/public/Aurora_Path_User_Guide.mp4" controls width="100%"></video>
+
+> Can't see the video? [Download it here](https://github.com/klee1611/AuroraPath/raw/main/public/Aurora_Path_User_Guide.mp4).
 
 ---
 
@@ -52,13 +62,30 @@ Key data flows:
 
 ---
 
+## 🔧 Tech Stack
+
+| | |
+|---|---|
+| Framework | Next.js 14 (App Router) |
+| Language | TypeScript |
+| Styling | Tailwind CSS |
+| Map | react-leaflet + Stadia Maps |
+| Charts | Recharts |
+| AI | Google Gemini 3.1 Flash |
+| Auth | Auth0 (SPA + M2M) |
+| Cache / Quota | Upstash Redis |
+| Data | NOAA Space Weather Prediction Center |
+| Deploy | Vercel |
+
+---
+
 ## 🚀 Setup
 
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/aurora-path.git
-cd aurora-path
+git clone https://github.com/klee1611/AuroraPath.git
+cd AuroraPath
 npm install
 ```
 
@@ -113,35 +140,6 @@ npx vercel --prod
 Add all `.env.local` variables in Vercel → Project Settings → Environment Variables.
 
 Update Auth0 callback/logout URLs to your Vercel domain.
-
----
-
-## 🔧 Tech Stack
-
-| | |
-|---|---|
-| Framework | Next.js 14 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS |
-| Map | react-leaflet + Stadia Maps |
-| Charts | Recharts |
-| AI | Google Gemini 3.1 Flash |
-| Auth | Auth0 (SPA + M2M) |
-| Cache / Quota | Upstash Redis |
-| Data | NOAA Space Weather Prediction Center |
-| Deploy | Vercel |
-
----
-
-## 🎬 Demo
-
-<video src="public/Aurora_Path_User_Guide.mp4" controls width="100%"></video>
-
----
-
-## 🌍 Earth Day Mission
-
-AuroraPath connects people with Earth's most spectacular natural phenomenon while promoting sustainable travel. Every Green Path recommendation prioritizes public transit and carpooling, showing users the kg of CO₂ they save by choosing an eco-friendly route to the aurora.
 
 ---
 
