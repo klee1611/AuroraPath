@@ -1,17 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { createHash } from 'crypto'
 import type { GreenPathRecommendation } from '@/types/noaa'
 
-const RATE_LIMIT_MS = 5 * 60 * 1000 // 5 minutes
-const GEMINI_MODEL = 'gemini-3.1-flash-lite-preview'
-
-/**
- * In-memory rate limiting — intentionally simple for a hackathon demo.
- * NOTE: In serverless environments (Vercel), each function invocation may run in
- * an isolated process, so this Map does NOT persist across cold starts or parallel
- * instances. For production use, replace with a shared store (e.g., Upstash Redis).
- */
-const rateLimitMap = new Map<string, number>()
+// Allow model override via env var so preview models can be swapped without a deploy.
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite-preview'
 
 // Module-level singleton — avoids re-instantiating the client on every request.
 // Will be null if GEMINI_API_KEY is missing (handled in getGreenPathRecommendations).
@@ -94,42 +85,13 @@ function gScaleDescription(g: number): string {
   return descriptions[Math.min(g, 5)] ?? 'Unknown'
 }
 
-function getRateLimitKey(userId: string | null, ip: string): string {
-  if (userId) {
-    // Hash userId to avoid storing raw Auth0 sub claims in memory
-    return 'user:' + createHash('sha256').update(userId).digest('hex').slice(0, 16)
-  }
-  return `ip:${ip}`
-}
-
-export function checkRateLimit(userId: string | null, ip: string): { allowed: boolean; waitMs: number } {
-  const key = getRateLimitKey(userId, ip)
-  const lastCall = rateLimitMap.get(key)
-  if (!lastCall) return { allowed: true, waitMs: 0 }
-  const elapsed = Date.now() - lastCall
-  if (elapsed >= RATE_LIMIT_MS) return { allowed: true, waitMs: 0 }
-  return { allowed: false, waitMs: RATE_LIMIT_MS - elapsed }
-}
-
-export function recordRateLimitCall(userId: string | null, ip: string): void {
-  rateLimitMap.set(getRateLimitKey(userId, ip), Date.now())
-}
-
 export async function getGreenPathRecommendations(
   avs: number,
   gScale: number,
   lat: number,
   lng: number,
   region: string,
-  userId: string | null,
-  ip: string
 ): Promise<GreenPathRecommendation[]> {
-  const { allowed, waitMs } = checkRateLimit(userId, ip)
-  if (!allowed) {
-    const waitMin = Math.ceil(waitMs / 60000)
-    throw new Error(`Rate limit: please wait ${waitMin} more minute${waitMin !== 1 ? 's' : ''} before requesting a new Green Path.`)
-  }
-
   const model = getGenAI().getGenerativeModel({
     model: GEMINI_MODEL,
     systemInstruction: SYSTEM_PROMPT,
@@ -178,6 +140,5 @@ export async function getGreenPathRecommendations(
   )
   if (validated.length === 0) throw new Error('Gemini returned no valid recommendations.')
 
-  recordRateLimitCall(userId, ip)
   return validated.slice(0, 3)
 }

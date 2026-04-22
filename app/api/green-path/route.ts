@@ -23,7 +23,8 @@ function sanitizeRegion(raw: unknown): string {
 
 /** CORS headers — restrict to own origin */
 function corsHeaders(req: NextRequest): Record<string, string> {
-  const origin = process.env.AUTH0_BASE_URL ?? 'http://localhost:3000'
+  // APP_BASE_URL is the Auth0 v4 standard; AUTH0_BASE_URL is the v3 legacy alias
+  const origin = process.env.APP_BASE_URL ?? process.env.AUTH0_BASE_URL ?? 'http://localhost:3000'
   const requestOrigin = req.headers.get('origin') ?? ''
   // Only echo back the origin if it matches our own; otherwise deny cross-origin
   const allowedOrigin = requestOrigin === origin ? origin : ''
@@ -54,6 +55,19 @@ export async function POST(req: NextRequest) {
     }
     const userId = session.user.sub as string
 
+    // Parse and validate body first — avoids wasting a Redis quota command on bad input
+    const body = (await req.json()) as GreenPathRequest
+
+    const lat = typeof body.lat === 'number' ? Math.max(-90, Math.min(90, body.lat)) : null
+    const lng = typeof body.lng === 'number' ? Math.max(-180, Math.min(180, body.lng)) : null
+    if (lat === null || lng === null) {
+      return NextResponse.json({ error: 'Valid lat and lng are required.' }, { status: 400, headers })
+    }
+
+    const region = sanitizeRegion(body.region)
+    const avs = typeof body.avs === 'number' ? Math.max(0, Math.min(100, body.avs)) : 0
+    const gScale = typeof body.gScale === 'number' ? Math.max(0, Math.min(5, Math.round(body.gScale))) : 0
+
     // Per-user daily quota check — read-only, does NOT consume the call yet
     const quota = await checkQuota(userId)
     const rateLimitHeaders: Record<string, string> = {
@@ -76,39 +90,13 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const body = (await req.json()) as GreenPathRequest
-
-    // Validate and sanitize inputs
-    const lat = typeof body.lat === 'number' ? Math.max(-90, Math.min(90, body.lat)) : null
-    const lng = typeof body.lng === 'number' ? Math.max(-180, Math.min(180, body.lng)) : null
-    if (lat === null || lng === null) {
-      return NextResponse.json({ error: 'Valid lat and lng are required.' }, { status: 400, headers })
-    }
-
-    const region = sanitizeRegion(body.region)
-    const avs = typeof body.avs === 'number' ? Math.max(0, Math.min(100, body.avs)) : 0
-    const gScale = typeof body.gScale === 'number' ? Math.max(0, Math.min(5, Math.round(body.gScale))) : 0
-
     // Log agent identity for Auth0 for Agents prize requirement
     // Mask userId to avoid logging raw PII (Auth0 sub) — use first 8 chars only
     const maskedUserId = userId.slice(0, 8) + '…'
     const { hasIdentity, agentId } = await assertAgentIdentity()
     console.log(`[GreenPath Agent] Identity: ${agentId} (managed: ${hasIdentity}) | user: ${maskedUserId}`)
 
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-      req.headers.get('x-real-ip') ??
-      'unknown'
-
-    const recommendations = await getGreenPathRecommendations(
-      avs,
-      gScale,
-      lat,
-      lng,
-      region,
-      userId,
-      ip
-    )
+    const recommendations = await getGreenPathRecommendations(avs, gScale, lat, lng, region)
 
     // Gemini succeeded — now record the spend against the user's daily quota
     const updatedQuota = await incrementQuota(userId)
@@ -128,13 +116,9 @@ export async function POST(req: NextRequest) {
     )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to generate recommendations.'
-    const isAppRateLimit = message.startsWith('Rate limit:')
     const isQuotaError = message.includes('429') || message.includes('quota') || message.includes('Too Many Requests')
     const isOverloaded = message.includes('503') || message.includes('Service Unavailable') || message.includes('high demand')
 
-    if (isAppRateLimit) {
-      return NextResponse.json({ error: message }, { status: 429, headers })
-    }
     if (isQuotaError) {
       return NextResponse.json(
         { error: 'The AI service is temporarily at capacity (API quota). Please try again in a minute.' },

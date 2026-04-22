@@ -47,9 +47,9 @@ function makePostRequest(body: Record<string, unknown>, url = 'http://localhost:
 const VALID_BODY = { lat: 65.0, lng: 25.0, region: 'Oulu, Finland', avs: 62, gScale: 3 }
 
 const MOCK_RECS = [
-  { location: 'Oulanka National Park', lat: 66.37, lng: 29.27, darkSkyRating: 5, carbonSavedKg: 12, tip: 'Take bus', transportMode: 'Bus' },
-  { location: 'Pyha Luosto', lat: 67.01, lng: 27.1,  darkSkyRating: 4, carbonSavedKg: 8,  tip: 'Cycle',    transportMode: 'Cycle' },
-  { location: 'Saariselka',  lat: 68.42, lng: 27.43, darkSkyRating: 5, carbonSavedKg: 15, tip: 'Walk',     transportMode: 'Walk' },
+  { name: 'Oulanka National Park', lat: 66.37, lng: 29.27, darkSkyRating: 5, distanceKm: 150, carbonSavedKg: 12, transitOption: 'Take bus', bestHour: '22:00 UTC', description: 'Excellent dark sky park' },
+  { name: 'Pyha Luosto', lat: 67.01, lng: 27.1,  darkSkyRating: 4, distanceKm: 200, carbonSavedKg: 8,  transitOption: 'Cycle',    bestHour: '23:00 UTC', description: 'Fell area with no light pollution' },
+  { name: 'Saariselka',  lat: 68.42, lng: 27.43, darkSkyRating: 5, distanceKm: 280, carbonSavedKg: 15, transitOption: 'Walk',     bestHour: '01:00 UTC', description: 'Remote village above treeline' },
 ]
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ describe('POST /api/green-path', () => {
       expect(res.status).toBe(200)
       const body = await res.json()
       expect(body.recommendations).toHaveLength(3)
-      expect(body.recommendations[0].location).toBe('Oulanka National Park')
+      expect(body.recommendations[0].name).toBe('Oulanka National Park')
     })
 
     it('response includes agentId and generatedAt', async () => {
@@ -191,15 +191,15 @@ describe('POST /api/green-path', () => {
   })
 
   describe('error handling', () => {
-    it('returns 429 for app-level rate limit error', async () => {
+    it('returns 500 for generic Gemini errors', async () => {
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|rate-limited' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
-      mockGetGreenPathRecommendations.mockRejectedValue(new Error('Rate limit: too many requests from this user'))
+      mockGetGreenPathRecommendations.mockRejectedValue(new Error('Some unexpected Gemini failure'))
 
       const { POST } = await import('@/app/api/green-path/route')
       const res = await POST(makePostRequest(VALID_BODY))
 
-      expect(res.status).toBe(429)
+      expect(res.status).toBe(500)
     })
 
     it('returns 429 for Gemini API quota exhaustion (429 in message)', async () => {
