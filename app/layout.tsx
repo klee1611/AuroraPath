@@ -132,7 +132,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
         />
       </head>
-      <body className={`${inter.variable} font-sans bg-aurora-dark text-white antialiased min-h-screen`}>
+      <body suppressHydrationWarning className={`${inter.variable} font-sans bg-aurora-dark text-white antialiased min-h-screen`}>
         {/* Auth0Provider pre-populated with server-side user to avoid client round-trip */}
         <Auth0Provider user={session?.user}>
           <LanguageProvider>{children}</LanguageProvider>
