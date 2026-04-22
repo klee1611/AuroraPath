@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useUser } from '@auth0/nextjs-auth0/client'
 import { useTranslation } from '@/contexts/LanguageContext'
 import { LOCALES, type Locale } from '@/lib/i18n'
+import { ga } from '@/lib/analytics'
 
 interface DashboardHeaderProps {
   avs: number | null
@@ -94,7 +95,7 @@ export default function DashboardHeader({ avs, lastUpdated, isMockData }: Dashbo
             {LOCALES.map((loc) => (
               <button
                 key={loc.code}
-                onClick={() => setLocale(loc.code as Locale)}
+                onClick={() => { setLocale(loc.code as Locale); ga.languageSwitched(loc.code) }}
                 className={`px-2 py-1 text-xs font-medium transition-colors ${
                   locale === loc.code
                     ? 'bg-aurora-green/20 text-aurora-green'
@@ -133,6 +134,7 @@ export default function DashboardHeader({ avs, lastUpdated, isMockData }: Dashbo
           ) : (
             <a
               href={loginHref}
+              onClick={() => ga.loginClicked()}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium
                 bg-aurora-green/10 text-aurora-green border border-aurora-green/30
                 hover:bg-aurora-green/20 transition-all duration-200"

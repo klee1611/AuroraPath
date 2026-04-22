@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { GreenPathRecommendation, AuroraAPIResponse } from '@/types/noaa'
 import { useUser } from '@auth0/nextjs-auth0/client'
 import { useTranslation } from '@/contexts/LanguageContext'
+import { ga } from '@/lib/analytics'
 
 interface GreenPathPanelProps {
   auroraData: AuroraAPIResponse | null
@@ -106,8 +107,8 @@ export default function GreenPathPanel({
       return
     }
     navigator.geolocation.getCurrentPosition(
-      pos => fetchGreenPath(pos.coords.latitude, pos.coords.longitude),
-      () => setError('Location access denied. Please enable location permissions.'),
+      pos => { ga.locationGranted(); fetchGreenPath(pos.coords.latitude, pos.coords.longitude) },
+      () => { ga.locationDenied(); setError('Location access denied. Please enable location permissions.') },
       { timeout: 10000 }
     )
   }
@@ -119,6 +120,7 @@ export default function GreenPathPanel({
 
     try {
       const region = await getRegionName(lat, lng)
+      ga.greenPathRequested({ avs: auroraData?.avs ?? 0, gScale: auroraData?.gScale ?? 0, region })
       const res = await fetch('/api/green-path', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -143,11 +145,13 @@ export default function GreenPathPanel({
       }
       if (!res.ok) throw new Error(data.error ?? 'Failed to generate Green Path')
       onRecommendations(data.recommendations)
+      ga.greenPathSuccess({ avs: auroraData?.avs ?? 0, recommendationCount: data.recommendations?.length ?? 0 })
       setAgentId(data.agentId ?? null)
       if (data.quota) {
         setQuota(data.quota)
       }
     } catch (err) {
+      ga.greenPathError(0)
       setError(err instanceof Error ? err.message : 'An error occurred.')
     } finally {
       setLoading(false)
