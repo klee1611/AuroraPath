@@ -18,7 +18,6 @@ jest.mock('@/lib/vscore', () => ({
 }))
 
 // Import route once after mocks are set up
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { GET } = require('@/app/api/aurora/route')
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
