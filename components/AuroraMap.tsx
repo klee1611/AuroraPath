@@ -109,7 +109,7 @@ export default function AuroraMap({ gScale, recommendations, userLocation, selec
         ).addTo(bandLayerRef.current!)
       })
     })()
-  }, [mapReady, gScale]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapReady, gScale])
 
   // ── Effect 3: update recommendation pins when Green Path arrives ────────────
   useEffect(() => {
@@ -155,7 +155,7 @@ export default function AuroraMap({ gScale, recommendations, userLocation, selec
         markerRefsRef.current.push(marker)
       })
     })()
-  }, [mapReady, recommendations]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapReady, recommendations])
 
   // ── Effect 4: update user location pin and pan map ─────────────────────────
   useEffect(() => {
@@ -186,7 +186,7 @@ export default function AuroraMap({ gScale, recommendations, userLocation, selec
     mapInstanceRef.current?.setView([rec.lat, rec.lng], 6, { animate: true })
     // Small delay so the pan animation starts before the popup opens
     setTimeout(() => marker.openPopup(), 300)
-  }, [mapReady, selectedRecIndex, recommendations]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapReady, selectedRecIndex, recommendations])
 
   return (
     <div className="bg-aurora-card border border-aurora-border rounded-2xl overflow-hidden">

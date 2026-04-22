@@ -21,6 +21,7 @@ export default function DashboardHeader({ avs, lastUpdated, isMockData }: Dashbo
   const [loginHref, setLoginHref] = useState('/api/v1/auth/login')
   useEffect(() => {
     if (window.location.search) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoginHref(
         `/api/v1/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`
       )

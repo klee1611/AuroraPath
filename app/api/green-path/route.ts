@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth0 } from '@/lib/auth0'
+import { auth0, assertAgentIdentity } from '@/lib/auth0'
 import { getGreenPathRecommendations } from '@/lib/gemini'
-import { assertAgentIdentity } from '@/lib/auth0'
 import { checkQuota, incrementQuota } from '@/lib/ratelimit'
 
 export const maxDuration = 30 // Allow up to 30s for Gemini response
@@ -56,7 +55,12 @@ export async function POST(req: NextRequest) {
     const userId = session.user.sub as string
 
     // Parse and validate body first — avoids wasting a Redis quota command on bad input
-    const body = (await req.json()) as GreenPathRequest
+    let body: GreenPathRequest
+    try {
+      body = (await req.json()) as GreenPathRequest
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400, headers })
+    }
 
     const lat = typeof body.lat === 'number' ? Math.max(-90, Math.min(90, body.lat)) : null
     const lng = typeof body.lng === 'number' ? Math.max(-180, Math.min(180, body.lng)) : null

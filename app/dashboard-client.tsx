@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import type { AuroraAPIResponse, GreenPathRecommendation } from '@/types/noaa'
 import { DEMO_SCENARIOS } from '@/lib/mockScenarios'
 import DashboardHeader from '@/components/DashboardHeader'
@@ -59,6 +60,7 @@ export default function AuroraPathDashboardClient() {
 
   // Initial fetch
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAuroraData()
   }, [fetchAuroraData])
 
@@ -82,9 +84,10 @@ export default function AuroraPathDashboardClient() {
 
   // Clear recommendations whenever demo scenario changes (user must click the button)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRecommendations([])
     setSelectedRecIndex(null)
-  }, [demoId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [demoId])
 
   return (
     <div className="min-h-screen">
@@ -131,9 +134,9 @@ export default function AuroraPathDashboardClient() {
                     G{s.aurora.gScale}
                   </a>
                 ))}
-                <a href="/" className="text-xs px-2 py-1 rounded-lg border border-aurora-green/40 text-aurora-green hover:bg-aurora-green/10 transition-colors">
+                <Link href="/" className="text-xs px-2 py-1 rounded-lg border border-aurora-green/40 text-aurora-green hover:bg-aurora-green/10 transition-colors">
                   {t.liveLink}
-                </a>
+                </Link>
               </div>
             </div>
           )}

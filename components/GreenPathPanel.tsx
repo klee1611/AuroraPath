@@ -117,6 +117,7 @@ export default function GreenPathPanel({
     setLoading(true)
     setError(null)
     setLocation({ lat, lng })
+    let responseStatus = 0
 
     try {
       const region = await getRegionName(lat, lng)
@@ -134,6 +135,7 @@ export default function GreenPathPanel({
       })
 
       const data = await res.json()
+      responseStatus = res.status
 
       if (res.status === 429) {
         const resetAt = data.resetAt ? new Date(data.resetAt).toLocaleTimeString() : 'midnight UTC'
@@ -151,7 +153,7 @@ export default function GreenPathPanel({
         setQuota(data.quota)
       }
     } catch (err) {
-      ga.greenPathError(0)
+      ga.greenPathError(responseStatus)
       setError(err instanceof Error ? err.message : 'An error occurred.')
     } finally {
       setLoading(false)
