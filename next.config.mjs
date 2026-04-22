@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const isDev = process.env.NODE_ENV === 'development'
+
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -33,7 +35,8 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               // Scripts: self + GA + inline scripts for Next.js hydration
-              "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com",
+              // unsafe-eval required in dev for React source map reconstruction
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://www.googletagmanager.com https://www.google-analytics.com`,
               // Styles: self + unsafe-inline for Tailwind/Leaflet
               "style-src 'self' 'unsafe-inline'",
               // Images: self + data URIs (Leaflet icons) + Gravatar/Auth0 avatars + Stadia tiles
