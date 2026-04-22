@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import Script from 'next/script'
-import { UserProvider } from '@auth0/nextjs-auth0/client'
+import { Auth0Provider } from '@auth0/nextjs-auth0/client'
+import { auth0 } from '@/lib/auth0'
 import { LanguageProvider } from '@/contexts/LanguageContext'
 import './globals.css'
 
@@ -115,7 +116,9 @@ const JSON_LD = {
   ],
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Pre-fetch session server-side so Auth0Provider can hydrate useUser() without a round-trip
+  const session = await auth0.getSession()
   return (
     <html lang="en" className="dark">
       <head>
@@ -130,10 +133,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className={`${inter.variable} font-sans bg-aurora-dark text-white antialiased min-h-screen`}>
-        {/* UserProvider at root so all pages have Auth0 context without forcing client rendering */}
-        <UserProvider>
+        {/* Auth0Provider pre-populated with server-side user to avoid client round-trip */}
+        <Auth0Provider user={session?.user}>
           <LanguageProvider>{children}</LanguageProvider>
-        </UserProvider>
+        </Auth0Provider>
         {GA_ID && (
           <>
             <Script

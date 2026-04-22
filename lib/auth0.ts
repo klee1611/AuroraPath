@@ -2,23 +2,35 @@
  * Auth0 helpers for AuroraPath.
  *
  * Provides:
- *  1. User authentication (SPA flow via @auth0/nextjs-auth0)
+ *  1. User authentication (SPA flow via @auth0/nextjs-auth0 v4)
  *  2. Machine-to-Machine token for the Gemini AI agent identity
  *     This satisfies the "Auth0 for Agents" prize category requirement —
  *     the AI agent has its own managed identity separate from user auth.
  */
+import { Auth0Client } from '@auth0/nextjs-auth0/server'
+
+/** Singleton Auth0 client — used for session management and middleware */
+export const auth0 = new Auth0Client()
 
 let agentTokenCache: { token: string; expiresAt: number } | null = null
 
 /**
  * Fetch an Auth0 M2M access token for the Gemini agent orchestrator.
  * Tokens are cached until 60 seconds before expiry.
+ *
+ * Supports both v4 env var (AUTH0_DOMAIN) and legacy (AUTH0_ISSUER_BASE_URL).
  */
 export async function getAgentToken(): Promise<string | null> {
   const clientId = process.env.AUTH0_M2M_CLIENT_ID
   const clientSecret = process.env.AUTH0_M2M_CLIENT_SECRET
   const audience = process.env.AUTH0_M2M_AUDIENCE
-  const issuer = process.env.AUTH0_ISSUER_BASE_URL
+
+  // Support both v4 AUTH0_DOMAIN and legacy AUTH0_ISSUER_BASE_URL
+  const domain = process.env.AUTH0_DOMAIN
+  const issuerBase = process.env.AUTH0_ISSUER_BASE_URL
+  const issuer = domain
+    ? `https://${domain}`
+    : issuerBase ?? null
 
   if (!clientId || !clientSecret || !audience || !issuer) {
     // M2M not configured — agent runs without Auth0 identity (dev mode)
@@ -73,3 +85,4 @@ export async function assertAgentIdentity(): Promise<{ hasIdentity: boolean; age
     return { hasIdentity: true, agentId: 'auth0-agent' }
   }
 }
+

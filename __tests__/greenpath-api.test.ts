@@ -8,14 +8,22 @@ import { NextRequest } from 'next/server'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockGetSession = jest.fn()
-jest.mock('@auth0/nextjs-auth0', () => ({ getSession: mockGetSession }))
+// Mock @/lib/auth0 — expose auth0.getSession() as v4 style
+jest.mock('@/lib/auth0', () => ({
+  assertAgentIdentity: jest.fn(),
+  auth0: { getSession: jest.fn() },
+}))
+
+// Get live references to the mock functions (jest.requireMock runs after hoisting)
+const auth0Mock = jest.requireMock('@/lib/auth0') as {
+  assertAgentIdentity: jest.Mock
+  auth0: { getSession: jest.Mock }
+}
+const mockAssertAgentIdentity = auth0Mock.assertAgentIdentity
+const mockGetSession = auth0Mock.auth0.getSession
 
 const mockGetGreenPathRecommendations = jest.fn()
 jest.mock('@/lib/gemini', () => ({ getGreenPathRecommendations: mockGetGreenPathRecommendations }))
-
-const mockAssertAgentIdentity = jest.fn()
-jest.mock('@/lib/auth0', () => ({ assertAgentIdentity: mockAssertAgentIdentity }))
 
 const mockCheckAndIncrementQuota = jest.fn()
 const mockCheckQuota = jest.fn()
@@ -85,7 +93,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('returns 400 when lat is missing', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
@@ -99,7 +106,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('returns 400 when lng is missing', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
@@ -111,7 +117,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('returns 400 when lat is a string', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
 
@@ -129,7 +134,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('returns 200 with recommendations on success', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
@@ -144,7 +148,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('response includes agentId and generatedAt', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'aurorapath-agent@test' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
@@ -159,7 +162,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('passes sanitized region to Gemini (strips control chars)', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
@@ -175,7 +177,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('clamps avs to 0-100', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
@@ -191,7 +192,6 @@ describe('POST /api/green-path', () => {
 
   describe('error handling', () => {
     it('returns 429 for app-level rate limit error', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|rate-limited' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockRejectedValue(new Error('Rate limit: too many requests from this user'))
@@ -203,7 +203,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('returns 429 for Gemini API quota exhaustion (429 in message)', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockRejectedValue(new Error('[429 Too Many Requests] quota exceeded'))
@@ -217,7 +216,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('returns 503 for Gemini overload (503 in message)', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockRejectedValue(new Error('[503 Service Unavailable] high demand'))
@@ -231,7 +229,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('returns 500 for unknown Gemini error', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockRejectedValue(new Error('Unexpected internal error'))
@@ -247,7 +244,6 @@ describe('POST /api/green-path', () => {
 
   describe('CORS', () => {
     it('handles OPTIONS preflight with 204', async () => {
-      jest.resetModules()
       const { OPTIONS } = await import('@/app/api/green-path/route')
       const req = new NextRequest('http://localhost:3000/api/green-path', {
         method: 'OPTIONS',
@@ -258,7 +254,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('sets Access-Control-Allow-Origin header', async () => {
-      jest.resetModules()
       const { OPTIONS } = await import('@/app/api/green-path/route')
       const req = new NextRequest('http://localhost:3000/api/green-path', {
         method: 'OPTIONS',
@@ -271,7 +266,6 @@ describe('POST /api/green-path', () => {
 
   describe('per-user daily quota', () => {
     it('returns 429 with reset info when user quota is exhausted', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|quota-user' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockCheckQuota.mockResolvedValue({
@@ -289,7 +283,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('returns X-RateLimit-Remaining header on success', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
@@ -309,7 +302,6 @@ describe('POST /api/green-path', () => {
     })
 
     it('includes quota info in success response body', async () => {
-      jest.resetModules()
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)

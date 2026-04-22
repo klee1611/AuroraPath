@@ -204,7 +204,7 @@ export default function GreenPathPanel({
             {t.signInDesc}
           </p>
           <a
-            href="/api/auth/login"
+            href="/auth/login"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
               bg-aurora-green/10 text-aurora-green border border-aurora-green/30
               hover:bg-aurora-green/20 transition-all duration-200"

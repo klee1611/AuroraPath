@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@auth0/nextjs-auth0'
+import { auth0 } from '@/lib/auth0'
 import { getGreenPathRecommendations } from '@/lib/gemini'
 import { assertAgentIdentity } from '@/lib/auth0'
 import { checkQuota, incrementQuota } from '@/lib/ratelimit'
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   const headers = corsHeaders(req)
   try {
     // Require an authenticated Auth0 session — prevents anonymous Gemini API spend
-    const session = await getSession()
+    const session = await auth0.getSession()
     if (!session?.user) {
       console.warn('[Security] Unauthenticated request to /api/green-path rejected (401)')
       return NextResponse.json(
