@@ -1,0 +1,67 @@
+# AuroraPath
+
+> Real-time, carbon-optimized aurora borealis visibility dashboard. Built for Earth Day 2026.
+
+AuroraPath combines live NOAA space weather data with Google Gemini AI to help nature enthusiasts
+find the northern lights while minimizing their carbon footprint.
+
+## What AuroraPath Does
+
+- Tracks real-time aurora activity using NOAA SWPC data (G-scale, Kp index, solar wind speed)
+- Computes an Aurora Visibility Score (AVS, 0–100) based on live geomagnetic conditions
+- Displays an interactive map of aurora visibility latitude bands that update every 30 seconds
+- Generates AI-powered "Green Path" recommendations: sustainable viewing routes with CO₂ savings,
+  public transit options, carpooling, walking paths, and dark-sky ratings
+
+## Aurora Visibility Score (AVS)
+
+The AVS is a deterministic physics model — not an AI estimate:
+
+```
+AVS = (G-Scale / 5 × 65) + (max(solarWindSpeed − 300, 0) / 500 × 25) + forecastBonus
+```
+
+| Score  | Level    | Meaning                              |
+|--------|----------|--------------------------------------|
+| 80–100 | Excellent | Visible at mid-latitudes (≥45°N)    |
+| 60–79  | High      | Strong activity at high latitudes    |
+| 35–59  | Moderate  | Visible at polar regions (≥60°N)    |
+| 10–34  | Low       | Far northern regions only            |
+| 0–9    | None      | Quiet geomagnetic conditions         |
+
+## Green Path Recommendations
+
+The Gemini AI agent generates 1–3 location recommendations per request, each containing:
+- Viewing spot name and coordinates
+- Distance and estimated travel time from user location
+- Recommended transport mode (transit, carpool, walk, bike)
+- CO₂ savings vs. solo driving (in kg)
+- Dark-sky rating (1–5 Bortle scale approximation)
+- Best viewing window based on current aurora forecast
+
+Geographic safety: recommendations are constrained to within ~300 km of the user's location
+and validated server-side with haversine distance checks.
+
+## Data Sources
+
+- NOAA Space Weather Prediction Center — https://www.swpc.noaa.gov/
+- Nominatim geocoding (OpenStreetMap) — reverse geocoding via server-side proxy
+- OpenStreetMap tile rendering
+
+## Technology Stack
+
+- Next.js 14 / React 18 / TypeScript
+- Google Gemini AI (Flash) for Green Path generation
+- Auth0 for user authentication and machine-to-machine API identity
+- Upstash Redis for rate limiting and quota tracking
+- Leaflet.js for interactive mapping
+
+## Earth Day Mission
+
+AuroraPath promotes low-carbon travel to aurora viewing sites. Each Green Path recommendation
+calculates the CO₂ saved by choosing public transit, carpooling, or active transport over
+solo private car use — making aurora chasing an act of environmental stewardship.
+
+## License
+
+MIT — Open source. Repository: https://github.com/klee1611/AuroraPath
