@@ -198,7 +198,7 @@ export default function AuroraPathDashboardClient() {
           </section>
 
           {/* Earth Day footer */}
-          <footer className="text-center py-8 border-t border-aurora-border">
+          <footer className="text-center py-8 border-t border-aurora-border space-y-3">
             <p className="text-sm text-gray-500">
               🌍 {t.earthDayBuilt}{' '}
               <a
@@ -218,6 +218,30 @@ export default function AuroraPathDashboardClient() {
               </a>
               {' '}· {t.aiPowered} · {t.authBy} · {t.mapTiles}
             </p>
+
+            {/* Author credit + Buy Me a Coffee */}
+            <div className="flex flex-col items-center gap-2 pt-2">
+              <p className="text-xs text-gray-600">
+                Built with 💚 by{' '}
+                <a
+                  href="https://github.com/klee1611"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-aurora-green hover:underline font-medium"
+                >
+                  klee1611
+                </a>
+                {' '}· MIT License
+              </p>
+              <a
+                href="https://www.buymeacoffee.com/klee1611"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FFDD00] text-[#000000] text-sm font-semibold hover:bg-[#FFE633] transition-colors shadow-md"
+              >
+                ☕ Buy me a coffee
+              </a>
+            </div>
           </footer>
         </main>
       </div>
