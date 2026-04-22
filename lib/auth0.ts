@@ -9,8 +9,23 @@
  */
 import { Auth0Client } from '@auth0/nextjs-auth0/server'
 
-/** Singleton Auth0 client — used for session management and middleware */
-export const auth0 = new Auth0Client()
+/**
+ * Versioned auth route prefix — all Auth0 endpoints live under /api/v1/auth/*
+ * This allows breaking-change-free iterations on auth flows while old clients
+ * still hit a stable path. Bump to /api/v2/auth/* for future breaking changes.
+ */
+const AUTH_PREFIX = '/api/v1/auth'
+
+/** Singleton Auth0 client — configured with versioned route paths */
+export const auth0 = new Auth0Client({
+  routes: {
+    login: `${AUTH_PREFIX}/login`,
+    logout: `${AUTH_PREFIX}/logout`,
+    callback: `${AUTH_PREFIX}/callback`,
+    backChannelLogout: `${AUTH_PREFIX}/backchannel-logout`,
+    connectAccount: `${AUTH_PREFIX}/connect`,
+  },
+})
 
 let agentTokenCache: { token: string; expiresAt: number } | null = null
 

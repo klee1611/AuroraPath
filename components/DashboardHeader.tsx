@@ -18,11 +18,11 @@ export default function DashboardHeader({ avs, lastUpdated, isMockData }: Dashbo
 
   // Preserve the current query string (e.g. ?demo=1) after Auth0 redirects back.
   // Must use useState+useEffect to avoid SSR/client hydration mismatch.
-  const [loginHref, setLoginHref] = useState('/auth/login')
+  const [loginHref, setLoginHref] = useState('/api/v1/auth/login')
   useEffect(() => {
     if (window.location.search) {
       setLoginHref(
-        `/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        `/api/v1/auth/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`
       )
     }
   }, [])
@@ -125,7 +125,7 @@ export default function DashboardHeader({ avs, lastUpdated, isMockData }: Dashbo
                 {user.name}
               </span>
               <a
-                href="/auth/logout"
+                href="/api/v1/auth/logout"
                 className="text-xs text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 rounded"
               >
                 {t.signOut}
