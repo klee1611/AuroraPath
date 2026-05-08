@@ -40,8 +40,11 @@ export async function getAgentToken(): Promise<string | null> {
   const clientSecret = process.env.AUTH0_M2M_CLIENT_SECRET
   const audience = process.env.AUTH0_M2M_AUDIENCE
 
-  // Support both v4 AUTH0_DOMAIN and legacy AUTH0_ISSUER_BASE_URL
-  const domain = process.env.AUTH0_DOMAIN
+  // Support both v4 AUTH0_DOMAIN and legacy AUTH0_ISSUER_BASE_URL.
+  // Strip any protocol prefix from AUTH0_DOMAIN — the env var should be just
+  // the hostname, but some setups include "https://" which would double it.
+  const rawDomain = process.env.AUTH0_DOMAIN
+  const domain = rawDomain ? rawDomain.replace(/^https?:\/\//, '') : undefined
   const issuerBase = process.env.AUTH0_ISSUER_BASE_URL
   const issuer = domain
     ? `https://${domain}`

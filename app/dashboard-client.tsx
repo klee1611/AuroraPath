@@ -193,7 +193,7 @@ export default function AuroraPathDashboardClient() {
               recommendations={recommendations}
               selectedRecIndex={selectedRecIndex}
               onSelectRec={setSelectedRecIndex}
-              demoRecommendations={(activeScenario?.aurora.avs ?? 0) >= 10 ? activeScenario?.recommendations : undefined}
+              demoRecommendations={IS_DEV || (activeScenario?.aurora.avs ?? 0) >= 10 ? activeScenario?.recommendations : undefined}
             />
           </section>
 
