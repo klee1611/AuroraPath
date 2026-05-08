@@ -23,6 +23,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   // Restore persisted preference on mount (client-only — avoids SSR hydration mismatch)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     try {
       const saved = localStorage.getItem(STORAGE_KEY) as Locale | null

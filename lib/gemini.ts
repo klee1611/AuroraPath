@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { GreenPathRecommendation } from '@/types/noaa'
 
 // Allow model override via env var so preview models can be swapped without a deploy.
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite-preview'
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite'
 
 // Module-level singleton — avoids re-instantiating the client on every request.
 // Will be null if GEMINI_API_KEY is missing (handled in getGreenPathRecommendations).

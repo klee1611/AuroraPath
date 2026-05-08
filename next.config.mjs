@@ -36,13 +36,13 @@ const nextConfig = {
               "default-src 'self'",
               // Scripts: self + GA + inline scripts for Next.js hydration
               // unsafe-eval required in dev for React source map reconstruction
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://www.googletagmanager.com https://www.google-analytics.com`,
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com`,
               // Styles: self + unsafe-inline for Tailwind/Leaflet
               "style-src 'self' 'unsafe-inline'",
               // Images: self + data URIs (Leaflet icons) + Gravatar/Auth0 avatars + Stadia tiles
               "img-src 'self' data: blob: https://s.gravatar.com https://*.auth0.com https://tiles.stadiamaps.com https://tile.openstreetmap.org",
-              // Connections: self + NOAA APIs + Auth0 + GA + Upstash + Nominatim
-              "connect-src 'self' https://services.swpc.noaa.gov https://*.auth0.com https://www.google-analytics.com https://nominatim.openstreetmap.org https://*.upstash.io",
+              // Connections: self + NOAA APIs + Auth0 + GA4 (both domains) + Upstash + Nominatim
+              "connect-src 'self' https://services.swpc.noaa.gov https://*.auth0.com https://www.google-analytics.com https://analytics.google.com https://nominatim.openstreetmap.org https://*.upstash.io",
               // Fonts: self only
               "font-src 'self'",
               // Workers: blob URLs for Leaflet web workers
