@@ -15,7 +15,7 @@
     "@google/generative-ai": "^0.21.0",
     "@upstash/redis": "^1.37.0",
     "leaflet": "^1.9.4",
-    "next": "^16.2.4",
+    "next": "^16.2.6",
     "react": "^18",
     "react-dom": "^18",
     "react-leaflet": "^4.2.1",
