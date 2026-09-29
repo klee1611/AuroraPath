@@ -31,19 +31,118 @@ AuroraPath connects people with Earth's most spectacular natural phenomenon — 
 
 ## 🧬 Aurora Visibility Score (AVS)
 
-An empirical model based on NOAA space weather indices:
+The AVS separates two questions that determine whether you actually see an aurora:
+**how much aurora is there**, and **does it reach you**.
 
 ```
-AVS = (G-Scale/5 × 65) + (max(windSpeed - 300, 0)/500 × 25) + forecastBonus
+AVS = activity × visibility
+
+activity   = weighted mean of (hemispheric power, Newell coupling, Kp)   → 0–100
+visibility = how far the auroral oval extends past your geomagnetic latitude → 0–1
 ```
+
+Implemented in [`lib/vscore.ts`](lib/vscore.ts).
+
+### Activity — how much aurora there is
+
+| Driver | Weight | Source |
+|--------|--------|--------|
+| **OVATION Prime hemispheric power** (GW) | 0.45 | NOAA's own auroral precipitation model output — total energy deposited into the hemisphere |
+| **Newell solar wind–magnetosphere coupling** | 0.30 | Computed live from propagated L1 solar wind |
+| **Planetary K-index** (continuous 0–9) | 0.25 | Standard 3-hour planetary geomagnetic index |
+
+Weights are **renormalised over whichever feeds respond**, so a NOAA outage degrades precision
+instead of silently skewing the score.
+
+The coupling term is the Newell coupling function — the rate at which magnetic flux is opened
+at the magnetopause, and the quantity that drives OVATION Prime itself:
+
+```
+dΦ_MP/dt = v^(4/3) · B⊥^(2/3) · sin^(8/3)(θ_c / 2)
+```
+
+where `v` is solar wind speed, `B⊥ = √(By² + Bz²)` is the IMF perpendicular to the Sun–Earth
+line, and `θ_c = arccos(Bz / B⊥)` is the clock angle, all in GSM coordinates. Northward IMF
+gives `θ_c = 0` and therefore **zero** coupling; fully southward IMF gives maximal coupling.
+
+### Visibility — whether it reaches you
+
+Aurora position follows **geomagnetic**, not geographic, latitude. NOAA's rule: the oval's
+equatorward edge sits at ~66° magnetic latitude at Kp 0 and moves equatorward ~2° per Kp level,
+reaching 48° at Kp 9.
+
+```
+oval edge (°mlat) = 66 − 2 × Kp
+```
+
+Observer geomagnetic latitude comes from a centred-dipole transform about the WMM2025
+geomagnetic north pole (80.85°N, 72.76°W). Full credit when you are poleward of the oval edge,
+tapering across the ~9° (≈1000 km) band where the aurora sits on the northern horizon — NOAA
+notes a clear northward view can catch aurora that far away — and falling off sharply beyond.
+
+Why this matters: Reykjavík (64.2°N) is magnetically *further north* than Tromsø (69.7°N), and
+Seattle and London sit at nearly the same geomagnetic latitude despite 4° of geographic
+difference. Location is optional — without it the score reports activity strength only.
+
+### Score bands
 
 | Score | Level | Meaning |
 |-------|-------|---------|
-| 80–100 | 🌌 Excellent | Visible at mid-latitudes (≥45°N) |
-| 60–79 | ✨ High | Strong activity at high latitudes |
-| 35–59 | 🌠 Moderate | Visible at polar regions (≥60°N) |
-| 10–34 | 🌃 Low | Far northern regions only |
-| 0–9 | 🌙 None | Quiet conditions |
+| 80–100 | 🌌 Excellent | Severe storm — visible well outside the usual auroral zone |
+| 60–79 | ✨ High | Strong, active display where the oval reaches you |
+| 35–59 | 🌠 Moderate | Solid display near or inside the oval |
+| 10–34 | 🌃 Low | Faint, or the oval is sitting north of you |
+| 0–9 | 🌙 None | Quiet, or far outside the oval's reach |
+
+### Why the previous model was inaccurate
+
+The earlier formula was `G-Scale/5 × 65 + wind bonus + forecast bonus`. Four problems:
+
+1. **The G-scale is zero below Kp 5.** G1 *starts* at Kp 5, so ordinary Kp 3–4 aurora nights —
+   the majority of viewable nights at high latitude — scored near zero. Using continuous Kp and
+   hemispheric power fixes this. On a live Kp 2.3 / 25 GW night the old formula returned 8
+   ("None") for Tromsø; the new one returns 34 ("Low"), which is what was actually happening.
+2. **IMF Bz was ignored entirely** — the single most important driver. Fast solar wind with
+   *northward* Bz produces almost no aurora, but the old wind term rewarded it anyway.
+3. **No observer latitude**, so a G5 storm read identically in Texas and in Tromsø.
+4. **A 24-hour forecast inflated the current score**, conflating "there may be aurora tomorrow"
+   with "there is aurora now."
+
+A separate bug compounded this: the solar wind feed
+(`solar-wind/plasma-7-day.json`) had been **retired by NOAA and was returning 404**, so wind
+speed was silently `null` and fell back to a hardcoded 400 km/s.
+
+### Data sources
+
+All from [NOAA SWPC](https://services.swpc.noaa.gov/), no API key required:
+
+| Feed | Endpoint |
+|------|----------|
+| Hemispheric power | [`text/aurora-nowcast-hemi-power.txt`](https://services.swpc.noaa.gov/text/aurora-nowcast-hemi-power.txt) |
+| Solar wind + IMF (propagated to the bow shock) | [`products/geospace/propagated-solar-wind-1-hour.json`](https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json) |
+| Planetary K-index | [`products/noaa-planetary-k-index.json`](https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json) |
+| G/R/S scales + forecasts | [`products/noaa-scales.json`](https://services.swpc.noaa.gov/products/noaa-scales.json) |
+
+### References
+
+- Newell, P. T., Sotirelis, T., Liou, K., Meng, C.-I., & Rich, F. J. (2007). *A nearly universal
+  solar wind–magnetosphere coupling function inferred from 10 magnetospheric state variables.*
+  Journal of Geophysical Research: Space Physics, 112, A01206.
+  [doi:10.1029/2006JA012015](https://doi.org/10.1029/2006JA012015) — the coupling function.
+- Newell, P. T., Sotirelis, T., & Wing, S. (2014). *OVATION Prime-2013: Extension of auroral
+  precipitation model to higher disturbance levels.* Space Weather, 12, 368–379.
+  [doi:10.1002/2014SW001056](https://doi.org/10.1002/2014SW001056) — the model behind
+  hemispheric power.
+- NOAA SWPC, [*Tips on Viewing the Aurora*](https://www.spaceweather.gov/content/tips-viewing-aurora)
+  — the Kp → geomagnetic latitude rule and the ~1000 km horizon reach.
+- NOAA SWPC, [*Aurora – 30 Minute Forecast*](https://www.spaceweather.gov/products/aurora-30-minute-forecast)
+  — OVATION Prime operational product and the hemispheric power index.
+- AuroraWatch UK (Lancaster University),
+  [*Ovation Aurora Forecast*](https://wp.lancs.ac.uk/aurorawatchuk/2017/03/07/ovation-aurora-forecast/)
+  — interpretation of hemispheric power values (<20 GW little or none, 20–50 GW near the oval,
+  >50 GW readily observable, 100+ GW major storm).
+- NOAA NCEI, [*Wandering of the Geomagnetic Poles*](https://www.ncei.noaa.gov/products/wandering-geomagnetic-poles)
+  — WMM2025 geomagnetic pole position used for the dipole transform.
 
 ---
 
@@ -56,7 +155,9 @@ The system uses a two-layer identity model:
 - **Machine-to-Machine App** (Auth0) — gives the Gemini AI agent a managed, auditable identity separate from any user
 
 Key data flows:
-- `GET /api/aurora` — public endpoint, NOAA ingestion + AVS computation, 30 req/min IP rate limit
+- `GET /api/aurora` — public endpoint, NOAA ingestion + AVS computation, 30 req/min IP rate limit.
+  Optional `?lat=&lng=` makes the score location-aware; coordinates are rounded to 0.1° by the
+  client before being sent
 - `GET /api/geocode` — server-side Nominatim proxy (hides user GPS coordinates from third parties)
 - `POST /api/green-path` — requires Auth0 session cookie; verifies identity, checks/increments Upstash Redis quota, calls Gemini with M2M token
 

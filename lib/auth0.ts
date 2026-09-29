@@ -8,6 +8,7 @@
  *     the AI agent has its own managed identity separate from user auth.
  */
 import { Auth0Client } from '@auth0/nextjs-auth0/server'
+import { describeError } from '@/lib/errors'
 
 /**
  * Versioned auth route prefix — all Auth0 endpoints live under /api/v1/auth/*
@@ -60,29 +61,40 @@ export async function getAgentToken(): Promise<string | null> {
     return agentTokenCache.token
   }
 
-  const res = await fetch(`${issuer}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      grant_type: 'client_credentials',
-      client_id: clientId,
-      client_secret: clientSecret,
-      audience,
-    }),
-  })
+  // Agent identity is best-effort: the caller degrades to 'anonymous-agent'. A network
+  // failure here must not take down the request that needed the token.
+  try {
+    const res = await fetch(`${issuer}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret,
+        audience,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    })
 
-  if (!res.ok) {
-    console.error('[Auth0 M2M] Token request failed:', res.status)
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      console.error(
+        `[Auth0 M2M] Token request failed: ${res.status} ${detail.slice(0, 300)}`
+      )
+      return null
+    }
+
+    const data = (await res.json()) as { access_token: string; expires_in: number }
+    agentTokenCache = {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in - 60) * 1000,
+    }
+
+    return agentTokenCache.token
+  } catch (error) {
+    console.error('[Auth0 M2M] Token request threw:', describeError(error))
     return null
   }
-
-  const data = (await res.json()) as { access_token: string; expires_in: number }
-  agentTokenCache = {
-    token: data.access_token,
-    expiresAt: Date.now() + (data.expires_in - 60) * 1000,
-  }
-
-  return agentTokenCache.token
 }
 
 /**
