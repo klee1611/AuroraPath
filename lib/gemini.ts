@@ -80,6 +80,10 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v)
+}
+
 function gScaleDescription(g: number): string {
   const descriptions = ['Quiet', 'Minor storm', 'Moderate storm', 'Strong storm', 'Severe storm', 'Extreme storm']
   return descriptions[Math.min(g, 5)] ?? 'Unknown'
@@ -128,16 +132,35 @@ export async function getGreenPathRecommendations(
   }
 
   // Validate required fields AND enforce max distance of 500km from user
-  // (generous buffer above the 300km prompt constraint to handle edge cases)
+  // (generous buffer above the 300km prompt constraint to handle edge cases).
+  // Model output is untrusted (the region string is user-supplied), so rebuild each
+  // object from typed, length-capped fields rather than passing it through.
   const MAX_DISTANCE_KM = 500
-  const validated = recommendations.filter(r =>
-    typeof r.name === 'string' &&
-    typeof r.lat === 'number' && r.lat >= -90 && r.lat <= 90 &&
-    typeof r.lng === 'number' && r.lng >= -180 && r.lng <= 180 &&
-    typeof r.distanceKm === 'number' &&
-    typeof r.darkSkyRating === 'number' &&
-    haversineKm(lat, lng, r.lat, r.lng) <= MAX_DISTANCE_KM
-  )
+  const validated: GreenPathRecommendation[] = recommendations
+    .filter(r =>
+      r !== null && typeof r === 'object' &&
+      typeof r.name === 'string' &&
+      typeof r.description === 'string' &&
+      typeof r.transitOption === 'string' &&
+      typeof r.bestHour === 'string' &&
+      isFiniteNumber(r.lat) && r.lat >= -90 && r.lat <= 90 &&
+      isFiniteNumber(r.lng) && r.lng >= -180 && r.lng <= 180 &&
+      isFiniteNumber(r.distanceKm) &&
+      isFiniteNumber(r.carbonSavedKg) &&
+      isFiniteNumber(r.darkSkyRating) &&
+      haversineKm(lat, lng, r.lat, r.lng) <= MAX_DISTANCE_KM
+    )
+    .map(r => ({
+      name: r.name.slice(0, 120),
+      description: r.description.slice(0, 400),
+      lat: r.lat,
+      lng: r.lng,
+      distanceKm: Math.round(r.distanceKm),
+      transitOption: r.transitOption.slice(0, 200),
+      carbonSavedKg: Math.round(r.carbonSavedKg),
+      bestHour: r.bestHour.slice(0, 20),
+      darkSkyRating: Math.max(1, Math.min(5, Math.round(r.darkSkyRating))),
+    }))
   if (validated.length === 0) throw new Error('Gemini returned no valid recommendations.')
 
   return validated.slice(0, 3)

@@ -60,8 +60,22 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Optional observer position — lets the score account for whether the auroral oval
+    // actually reaches the user's geomagnetic latitude. Omitted = activity strength only.
+    const latParam = parseFloat(req.nextUrl.searchParams.get('lat') ?? '')
+    const lngParam = parseFloat(req.nextUrl.searchParams.get('lng') ?? '')
+    // Round to 0.1° (~11 km) server-side too — the client already does, but other callers
+    // may not. Upstream load from cache-busting query strings is bounded by the NOAA cache.
+    const observer =
+      Number.isFinite(latParam) &&
+      Number.isFinite(lngParam) &&
+      Math.abs(latParam) <= 90 &&
+      Math.abs(lngParam) <= 180
+        ? { lat: Math.round(latParam * 10) / 10, lng: Math.round(lngParam * 10) / 10 }
+        : null
+
     const data = await getNOAAData()
-    const response = buildAuroraResponse(data)
+    const response = buildAuroraResponse(data, observer)
     return NextResponse.json(response, {
       headers: {
         'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60',

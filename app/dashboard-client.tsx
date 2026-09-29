@@ -45,7 +45,14 @@ export default function AuroraPathDashboardClient() {
 
   const fetchAuroraData = useCallback(async () => {
     try {
-      const url = demoId ? `/api/aurora?demo=${demoId}` : '/api/aurora'
+      // Coarsen to ~11 km before sending: the oval model works at ~2° granularity, so this
+      // costs no accuracy while limiting precision shared and improving cache hit rate.
+      const coords = userLocation
+        ? `lat=${userLocation.lat.toFixed(1)}&lng=${userLocation.lng.toFixed(1)}`
+        : ''
+      const url = demoId
+        ? `/api/aurora?demo=${demoId}`
+        : `/api/aurora${coords ? `?${coords}` : ''}`
       const res = await fetch(url)
       if (!res.ok) throw new Error(`API error: ${res.status}`)
       const data = (await res.json()) as AuroraAPIResponse
@@ -56,7 +63,7 @@ export default function AuroraPathDashboardClient() {
     } finally {
       setLoading(false)
     }
-  }, [demoId])
+  }, [demoId, userLocation])
 
   // Initial fetch
   useEffect(() => {

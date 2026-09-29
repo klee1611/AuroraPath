@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth0, assertAgentIdentity } from '@/lib/auth0'
 import { getGreenPathRecommendations } from '@/lib/gemini'
-import { checkQuota, incrementQuota } from '@/lib/ratelimit'
+import { checkAndIncrementQuota, type QuotaReservation } from '@/lib/ratelimit'
+import { getNOAAData } from '@/lib/noaa'
+import { buildAuroraResponse } from '@/lib/vscore'
+import { describeError } from '@/lib/errors'
 
 export const maxDuration = 30 // Allow up to 30s for Gemini response
 
@@ -9,9 +12,10 @@ interface GreenPathRequest {
   lat: number
   lng: number
   region: string
-  avs: number
-  gScale: number
 }
+
+/** Below this AVS there is nothing to see — matches the client-side button gate. */
+const MIN_AVS = 10
 
 /** Sanitize a user-supplied string to prevent prompt injection into Gemini. */
 function sanitizeRegion(raw: unknown): string {
@@ -42,6 +46,7 @@ export async function OPTIONS(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const headers = corsHeaders(req)
+  let reservation: QuotaReservation | undefined
   try {
     // Require an authenticated Auth0 session — prevents anonymous Gemini API spend
     const session = await auth0.getSession()
@@ -54,41 +59,62 @@ export async function POST(req: NextRequest) {
     }
     const userId = session.user.sub as string
 
-    // Parse and validate body first — avoids wasting a Redis quota command on bad input
+    // Parse and validate body first — avoids wasting a quota slot on bad input
     let body: GreenPathRequest
     try {
       body = (await req.json()) as GreenPathRequest
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400, headers })
     }
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400, headers })
+    }
 
-    const lat = typeof body.lat === 'number' ? Math.max(-90, Math.min(90, body.lat)) : null
-    const lng = typeof body.lng === 'number' ? Math.max(-180, Math.min(180, body.lng)) : null
+    const lat = Number.isFinite(body.lat) ? Math.max(-90, Math.min(90, body.lat)) : null
+    const lng = Number.isFinite(body.lng) ? Math.max(-180, Math.min(180, body.lng)) : null
     if (lat === null || lng === null) {
       return NextResponse.json({ error: 'Valid lat and lng are required.' }, { status: 400, headers })
     }
 
     const region = sanitizeRegion(body.region)
-    const avs = typeof body.avs === 'number' ? Math.max(0, Math.min(100, body.avs)) : 0
-    const gScale = typeof body.gScale === 'number' ? Math.max(0, Math.min(5, Math.round(body.gScale))) : 0
 
-    // Per-user daily quota check — read-only, does NOT consume the call yet
-    const quota = await checkQuota(userId)
-    const rateLimitHeaders: Record<string, string> = {
-      'X-RateLimit-Limit': String(quota.limit),
-      'X-RateLimit-Remaining': String(quota.remaining),
-      'X-RateLimit-Reset': String(Math.floor(quota.resetAt.getTime() / 1000)),
+    // Derive conditions server-side — client-supplied avs/gScale are ignored so the gate
+    // below cannot be bypassed and the prompt cannot be fed fabricated conditions.
+    const conditions = buildAuroraResponse(await getNOAAData(), { lat, lng })
+    const { avs, gScale } = conditions
+
+    // Development skips the gate so the feature can be tested during quiet conditions.
+    if (avs < MIN_AVS && process.env.NODE_ENV !== 'development') {
+      return NextResponse.json(
+        { error: `Aurora activity is too low at your location right now (AVS ${avs}). Try again when activity picks up.` },
+        { status: 409, headers }
+      )
     }
 
-    if (!quota.allowed) {
-      const resetTime = quota.resetAt.toUTCString()
+    // Reserve a slot atomically before spending — a separate check and increment would let
+    // concurrent requests all pass the check. The slot is released below if Gemini fails.
+    reservation = await checkAndIncrementQuota(userId)
+    const rateLimitHeaders: Record<string, string> = {
+      'X-RateLimit-Limit': String(reservation.limit),
+      'X-RateLimit-Remaining': String(reservation.remaining),
+      'X-RateLimit-Reset': String(Math.floor(reservation.resetAt.getTime() / 1000)),
+    }
+
+    if (!reservation.allowed) {
+      if (reservation.reason === 'global') {
+        return NextResponse.json(
+          { error: 'Green Path is temporarily limited. Please try again later.' },
+          { status: 503, headers: { ...headers, 'Retry-After': '600' } }
+        )
+      }
+      const resetTime = reservation.resetAt.toUTCString()
       console.warn(`[Security] Quota exhausted for user ${userId.slice(0, 8)}… — 429 returned`)
       return NextResponse.json(
         {
-          error: `You've used all ${quota.limit} Green Path searches for today. Resets at midnight UTC (${resetTime}).`,
+          error: `You've used all ${reservation.limit} Green Path searches for today. Resets at midnight UTC (${resetTime}).`,
           remaining: 0,
-          resetAt: quota.resetAt.toISOString(),
-          limit: quota.limit,
+          resetAt: reservation.resetAt.toISOString(),
+          limit: reservation.limit,
         },
         { status: 429, headers: { ...headers, ...rateLimitHeaders } }
       )
@@ -102,23 +128,23 @@ export async function POST(req: NextRequest) {
 
     const recommendations = await getGreenPathRecommendations(avs, gScale, lat, lng, region)
 
-    // Gemini succeeded — now record the spend against the user's daily quota
-    const updatedQuota = await incrementQuota(userId)
-
     return NextResponse.json(
       {
         recommendations,
         agentId,
         generatedAt: new Date().toISOString(),
         quota: {
-          remaining: updatedQuota.remaining,
-          limit: updatedQuota.limit,
-          resetAt: updatedQuota.resetAt.toISOString(),
+          remaining: reservation.remaining,
+          limit: reservation.limit,
+          resetAt: reservation.resetAt.toISOString(),
         },
       },
       { headers: { ...headers, ...rateLimitHeaders } }
     )
   } catch (error) {
+    // Don't charge the user for a request that produced nothing
+    if (reservation?.allowed) await reservation.release()
+
     const message = error instanceof Error ? error.message : 'Failed to generate recommendations.'
     const isQuotaError = message.includes('429') || message.includes('quota') || message.includes('Too Many Requests')
     const isOverloaded = message.includes('503') || message.includes('Service Unavailable') || message.includes('high demand')
@@ -135,7 +161,9 @@ export async function POST(req: NextRequest) {
         { status: 503, headers }
       )
     }
-    console.error('[GreenPath] Unexpected error:', message)
+    // Log the full cause chain — a bare "fetch failed" hides the ENOTFOUND/ECONNREFUSED
+    // that identifies which upstream service is actually down.
+    console.error('[GreenPath] Unexpected error:', describeError(error))
     return NextResponse.json({ error: 'Failed to generate recommendations.' }, { status: 500, headers })
   }
 }
