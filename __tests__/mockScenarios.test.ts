@@ -1,5 +1,5 @@
 import { DEMO_SCENARIOS, getScenario } from '@/lib/mockScenarios'
-import { calculateAVS } from '@/lib/vscore'
+import { calculateAVS, getActivityMeta } from '@/lib/vscore'
 
 describe('DEMO_SCENARIOS', () => {
   it('has exactly 4 scenarios', () => {
@@ -64,25 +64,45 @@ describe('DEMO_SCENARIOS', () => {
     })
   })
 
-  it('AVS is within ±20 of formula output for each scenario', () => {
-    // Scenarios have hand-crafted AVS values; verify they stay close to the formula
+  it('canned AVS matches what the model produces from the scenario readings', () => {
+    // Demo payloads are served verbatim, so their AVS must stay consistent with the inputs
+    // they advertise — otherwise a demo would show a score the model would never produce.
     DEMO_SCENARIOS.forEach(s => {
-      const formulaAvs = calculateAVS(
-        s.aurora.gScale,
-        s.aurora.windSpeed,
-        s.aurora.forecast24h.g
-      )
-      expect(Math.abs(s.aurora.avs - formulaAvs)).toBeLessThanOrEqual(20)
+      const { avs } = calculateAVS({
+        hemisphericPowerGW: s.aurora.hemisphericPowerGW,
+        kp: s.aurora.kp,
+        windSpeed: s.aurora.windSpeed,
+        // bt is the full field magnitude; recover the By the scenario implies from bt and bz.
+        by: Math.sqrt(Math.max(s.aurora.bt! ** 2 - s.aurora.bz! ** 2, 0)),
+        bz: s.aurora.bz,
+      })
+      expect(Math.abs(s.aurora.avs - avs)).toBeLessThanOrEqual(10)
     })
+  })
+
+  it('scenario G-scale, Kp and hemispheric power all escalate together', () => {
+    const kps = DEMO_SCENARIOS.map(s => s.aurora.kp!)
+    const hps = DEMO_SCENARIOS.map(s => s.aurora.hemisphericPowerGW!)
+    for (let i = 1; i < DEMO_SCENARIOS.length; i++) {
+      expect(kps[i]).toBeGreaterThan(kps[i - 1])
+      expect(hps[i]).toBeGreaterThan(hps[i - 1])
+    }
   })
 
   it('scenario 1 has activityLevel none', () => {
     expect(DEMO_SCENARIOS[0].aurora.activityLevel).toBe('none')
   })
 
-  it('scenario 4 has activityLevel excellent and avs 93 (formula max)', () => {
+  it('scenario 4 has activityLevel excellent', () => {
     expect(DEMO_SCENARIOS[3].aurora.activityLevel).toBe('excellent')
-    expect(DEMO_SCENARIOS[3].aurora.avs).toBe(93)
+    expect(DEMO_SCENARIOS[3].aurora.avs).toBeGreaterThanOrEqual(80)
+  })
+
+  it('each scenario activityLevel agrees with its AVS band', () => {
+    DEMO_SCENARIOS.forEach(s => {
+      expect(getActivityMeta(s.aurora.avs).level).toBe(s.aurora.activityLevel)
+      expect(getActivityMeta(s.aurora.avs).color).toBe(s.aurora.activityColor)
+    })
   })
 })
 

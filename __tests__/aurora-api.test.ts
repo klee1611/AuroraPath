@@ -79,10 +79,10 @@ describe('GET /api/aurora', () => {
   describe('demo mode (?demo=N) — dev only', () => {
     beforeEach(() => {
       // Demo mode is gated on NODE_ENV=development
-      process.env.NODE_ENV = 'development'
+      ;(process.env as Record<string, string>).NODE_ENV = 'development'
     })
     afterEach(() => {
-      process.env.NODE_ENV = 'test'
+      ;(process.env as Record<string, string>).NODE_ENV = 'test'
     })
 
     it('returns demo scenario 1 (G0/Quiet) without calling NOAA', async () => {
@@ -94,11 +94,12 @@ describe('GET /api/aurora', () => {
       expect(mockGetNOAAData).not.toHaveBeenCalled()
     })
 
-    it('returns demo scenario 4 (G5/Severe) with avs 93', async () => {
+    it('returns demo scenario 4 (G5/Severe) in the excellent band', async () => {
       const res = await GET(makeRequest('http://localhost:3000/api/aurora?demo=4'))
       const body = await res.json()
       expect(body.gScale).toBe(5)
-      expect(body.avs).toBe(93)
+      expect(body.avs).toBeGreaterThanOrEqual(80)
+      expect(body.activityLevel).toBe('excellent')
     })
 
     it('sets X-Demo-Scenario header for demo requests', async () => {
@@ -124,7 +125,7 @@ describe('GET /api/aurora', () => {
     })
 
     it('ignores ?demo param in production (NODE_ENV=production)', async () => {
-      process.env.NODE_ENV = 'production'
+      ;(process.env as Record<string, string>).NODE_ENV = 'production'
       const res = await GET(makeRequest('http://localhost:3000/api/aurora?demo=4'))
       // Should fall through to live NOAA fetch, not return mock data
       expect(mockGetNOAAData).toHaveBeenCalledTimes(1)

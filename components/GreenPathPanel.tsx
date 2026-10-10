@@ -126,13 +126,8 @@ export default function GreenPathPanel({
       const res = await fetch('/api/green-path', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lat,
-          lng,
-          region,
-          avs: auroraData?.avs ?? 0,
-          gScale: auroraData?.gScale ?? 0,
-        }),
+        // Conditions (AVS, G-scale) are derived server-side from NOAA data
+        body: JSON.stringify({ lat, lng, region }),
       })
 
       const data = await res.json()

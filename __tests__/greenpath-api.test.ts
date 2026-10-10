@@ -26,13 +26,20 @@ const mockGetGreenPathRecommendations = jest.fn()
 jest.mock('@/lib/gemini', () => ({ getGreenPathRecommendations: mockGetGreenPathRecommendations }))
 
 const mockCheckAndIncrementQuota = jest.fn()
-const mockCheckQuota = jest.fn()
-const mockIncrementQuota = jest.fn()
 jest.mock('@/lib/ratelimit', () => ({
   checkAndIncrementQuota: mockCheckAndIncrementQuota,
-  checkQuota: mockCheckQuota,
-  incrementQuota: mockIncrementQuota,
 }))
+
+const mockGetNOAAData = jest.fn()
+jest.mock('@/lib/noaa', () => ({ getNOAAData: mockGetNOAAData }))
+
+const mockBuildAuroraResponse = jest.fn()
+jest.mock('@/lib/vscore', () => ({ buildAuroraResponse: mockBuildAuroraResponse }))
+
+const mockRelease = jest.fn()
+function reservation(overrides: Record<string, unknown> = {}) {
+  return { allowed: true, remaining: 4, limit: 5, resetAt: new Date(Date.now() + 86400000), release: mockRelease, ...overrides }
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,10 +65,10 @@ describe('POST /api/green-path', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'aurorapath-agent@test' })
-    // Default: quota allowed with 4 remaining (check returns allowed; increment returns updated)
-    const defaultQuota = { allowed: true, remaining: 4, limit: 5, resetAt: new Date(Date.now() + 86400000) }
-    mockCheckQuota.mockResolvedValue(defaultQuota)
-    mockIncrementQuota.mockResolvedValue(defaultQuota)
+    // Default: quota slot reserved with 4 remaining; live conditions well above the gate
+    mockCheckAndIncrementQuota.mockResolvedValue(reservation())
+    mockGetNOAAData.mockResolvedValue({})
+    mockBuildAuroraResponse.mockReturnValue({ avs: 62, gScale: 3 })
   })
 
   describe('authentication', () => {
@@ -176,17 +183,57 @@ describe('POST /api/green-path', () => {
       expect(sanitizedRegion).not.toContain('\x1f')
     })
 
-    it('clamps avs to 0-100', async () => {
-      mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
-      mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
-      mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
-
+    it('uses server-computed conditions and ignores client-supplied avs/gScale', async () => {
       const { POST } = await import('@/app/api/green-path/route')
-      await POST(makePostRequest({ ...VALID_BODY, avs: 9999 }))
+      await POST(makePostRequest({ ...VALID_BODY, avs: 9999, gScale: 5 }))
 
-      const callArgs = mockGetGreenPathRecommendations.mock.calls[0]
-      const clampedAvs: number = callArgs[0]
-      expect(clampedAvs).toBeLessThanOrEqual(100)
+      expect(mockBuildAuroraResponse).toHaveBeenCalledWith(expect.anything(), { lat: 65.0, lng: 25.0 })
+      const [avs, gScale] = mockGetGreenPathRecommendations.mock.calls[0]
+      expect(avs).toBe(62)
+      expect(gScale).toBe(3)
+    })
+
+    it('returns 400 for a non-object JSON body', async () => {
+      const { POST } = await import('@/app/api/green-path/route')
+      const req = new NextRequest('http://localhost:3000/api/green-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'null',
+      })
+      const res = await POST(req)
+      expect(res.status).toBe(400)
+    })
+  })
+
+  describe('activity gate', () => {
+    const originalEnv = process.env.NODE_ENV
+
+    beforeEach(() => {
+      mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
+      mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
+      mockBuildAuroraResponse.mockReturnValue({ avs: 4, gScale: 0 })
+    })
+
+    afterEach(() => {
+      ;(process.env as Record<string, string>).NODE_ENV = originalEnv as string
+    })
+
+    it('returns 409 without spending quota when server-computed AVS is below 10', async () => {
+      ;(process.env as Record<string, string>).NODE_ENV = 'production'
+      const { POST } = await import('@/app/api/green-path/route')
+      const res = await POST(makePostRequest({ ...VALID_BODY, avs: 90 }))
+
+      expect(res.status).toBe(409)
+      expect(mockCheckAndIncrementQuota).not.toHaveBeenCalled()
+      expect(mockGetGreenPathRecommendations).not.toHaveBeenCalled()
+    })
+
+    it('skips the gate in development', async () => {
+      ;(process.env as Record<string, string>).NODE_ENV = 'development'
+      const { POST } = await import('@/app/api/green-path/route')
+      const res = await POST(makePostRequest(VALID_BODY))
+
+      expect(res.status).toBe(200)
     })
   })
 
@@ -268,9 +315,9 @@ describe('POST /api/green-path', () => {
     it('returns 429 with reset info when user quota is exhausted', async () => {
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|quota-user' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
-      mockCheckQuota.mockResolvedValue({
-        allowed: false, remaining: 0, limit: 5, resetAt: new Date('2026-04-20T00:00:00Z'),
-      })
+      mockCheckAndIncrementQuota.mockResolvedValue(reservation({
+        allowed: false, remaining: 0, reason: 'user', resetAt: new Date('2026-04-20T00:00:00Z'),
+      }))
 
       const { POST } = await import('@/app/api/green-path/route')
       const res = await POST(makePostRequest(VALID_BODY))
@@ -286,12 +333,7 @@ describe('POST /api/green-path', () => {
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
-      mockCheckQuota.mockResolvedValue({
-        allowed: true, remaining: 3, limit: 5, resetAt: new Date(Date.now() + 86400000),
-      })
-      mockIncrementQuota.mockResolvedValue({
-        allowed: true, remaining: 3, limit: 5, resetAt: new Date(Date.now() + 86400000),
-      })
+      mockCheckAndIncrementQuota.mockResolvedValue(reservation({ remaining: 3 }))
 
       const { POST } = await import('@/app/api/green-path/route')
       const res = await POST(makePostRequest(VALID_BODY))
@@ -305,12 +347,7 @@ describe('POST /api/green-path', () => {
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockAssertAgentIdentity.mockResolvedValue({ hasIdentity: true, agentId: 'agent' })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
-      mockCheckQuota.mockResolvedValue({
-        allowed: true, remaining: 4, limit: 5, resetAt: new Date(Date.now() + 86400000),
-      })
-      mockIncrementQuota.mockResolvedValue({
-        allowed: true, remaining: 2, limit: 5, resetAt: new Date(Date.now() + 86400000),
-      })
+      mockCheckAndIncrementQuota.mockResolvedValue(reservation({ remaining: 2 }))
 
       const { POST } = await import('@/app/api/green-path/route')
       const res = await POST(makePostRequest(VALID_BODY))
@@ -319,6 +356,50 @@ describe('POST /api/green-path', () => {
       expect(body.quota).toBeDefined()
       expect(body.quota.remaining).toBe(2)
       expect(body.quota.limit).toBe(5)
+    })
+
+    it('reserves the quota slot before calling Gemini', async () => {
+      mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
+      const order: string[] = []
+      mockCheckAndIncrementQuota.mockImplementation(async () => { order.push('reserve'); return reservation() })
+      mockGetGreenPathRecommendations.mockImplementation(async () => { order.push('gemini'); return MOCK_RECS })
+
+      const { POST } = await import('@/app/api/green-path/route')
+      await POST(makePostRequest(VALID_BODY))
+
+      expect(order).toEqual(['reserve', 'gemini'])
+    })
+
+    it('releases the reserved slot when Gemini fails', async () => {
+      mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
+      mockGetGreenPathRecommendations.mockRejectedValue(new Error('Gemini returned non-JSON response.'))
+
+      const { POST } = await import('@/app/api/green-path/route')
+      const res = await POST(makePostRequest(VALID_BODY))
+
+      expect(res.status).toBe(500)
+      expect(mockRelease).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not release on success', async () => {
+      mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
+      mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
+
+      const { POST } = await import('@/app/api/green-path/route')
+      await POST(makePostRequest(VALID_BODY))
+
+      expect(mockRelease).not.toHaveBeenCalled()
+    })
+
+    it('returns 503 when the fallback capacity cap (not the user quota) denies the call', async () => {
+      mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
+      mockCheckAndIncrementQuota.mockResolvedValue(reservation({ allowed: false, reason: 'global' }))
+
+      const { POST } = await import('@/app/api/green-path/route')
+      const res = await POST(makePostRequest(VALID_BODY))
+
+      expect(res.status).toBe(503)
+      expect(mockGetGreenPathRecommendations).not.toHaveBeenCalled()
     })
   })
 })
