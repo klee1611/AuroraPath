@@ -2,8 +2,7 @@ import type {
   NOAAData,
   NOAAScalesResponse,
   SolarWindEntry,
-  PlanetaryKEntry,
-  HemisphericPowerEntry,
+  OvationGrid,
 } from '@/types/noaa'
 
 const NOAA_SCALES_URL = 'https://services.swpc.noaa.gov/products/noaa-scales.json'
@@ -14,9 +13,8 @@ const NOAA_SCALES_URL = 'https://services.swpc.noaa.gov/products/noaa-scales.jso
  */
 const NOAA_SOLAR_WIND_URL =
   'https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json'
-const NOAA_KP_URL = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'
-const NOAA_HEMI_POWER_URL =
-  'https://services.swpc.noaa.gov/text/aurora-nowcast-hemi-power.txt'
+/** OVATION Prime 30-minute forecast: SWPC's aurora probability on a global 1° grid (~900 KB). */
+const NOAA_OVATION_URL = 'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json'
 const FETCH_TIMEOUT_MS = 8000
 
 const MOCK_SCALES: NOAAScalesResponse = {
@@ -101,69 +99,66 @@ async function fetchLatestSolarWind(): Promise<SolarWindEntry | null> {
   }
 }
 
-async function fetchPlanetaryK(): Promise<PlanetaryKEntry | null> {
-  try {
-    const res = await fetchWithTimeout(NOAA_KP_URL)
-    if (!res.ok) return null
-    const rows = (await res.json()) as Array<{ time_tag: string; Kp: number | string }>
-    if (!Array.isArray(rows) || !rows.length) return null
-    const last = rows[rows.length - 1]
-    const kp = typeof last.Kp === 'number' ? last.Kp : parseFloat(last.Kp)
-    if (!Number.isFinite(kp)) return null
-    return { timeTag: last.time_tag, kp }
-  } catch {
-    return null
-  }
-}
+const OVATION_GRID_SIZE = 360 * 181
 
-async function fetchHemisphericPower(): Promise<HemisphericPowerEntry | null> {
+async function fetchOvation(): Promise<OvationGrid | null> {
   try {
-    const res = await fetchWithTimeout(NOAA_HEMI_POWER_URL)
+    const res = await fetchWithTimeout(NOAA_OVATION_URL)
     if (!res.ok) return null
-    const text = await res.text()
-    // Tabular: <observation> <forecast> <north GW> <south GW>; '#' lines are commentary.
-    const rows = text
-      .split('\n')
-      .map(l => l.trim())
-      .filter(l => l && !l.startsWith('#'))
-    if (!rows.length) return null
-
-    for (let i = rows.length - 1; i >= 0; i--) {
-      const parts = rows[i].split(/\s+/)
-      if (parts.length < 4) continue
-      const northGW = parseFloat(parts[2])
-      const southGW = parseFloat(parts[3])
-      if (!Number.isFinite(northGW) || !Number.isFinite(southGW)) continue
-      return { timeTag: parts[1], northGW, southGW }
+    const body = (await res.json()) as {
+      'Observation Time'?: unknown
+      'Forecast Time'?: unknown
+      coordinates?: unknown
     }
-    return null
+    if (!Array.isArray(body.coordinates)) return null
+
+    // Points are [lon 0–359, lat −90–90, probability 0–100]; resolve them into a flat grid
+    // rather than trusting the payload's ordering.
+    const probability = new Uint8Array(OVATION_GRID_SIZE)
+    let filled = 0
+    for (const point of body.coordinates as unknown[]) {
+      if (!Array.isArray(point) || point.length < 3) continue
+      const [lon, lat, p] = point
+      if (
+        !Number.isInteger(lon) || lon < 0 || lon > 359 ||
+        !Number.isInteger(lat) || lat < -90 || lat > 90 ||
+        typeof p !== 'number' || !Number.isFinite(p)
+      ) continue
+      probability[(lat + 90) * 360 + lon] = Math.round(Math.min(Math.max(p, 0), 100))
+      filled++
+    }
+    if (!filled) return null
+
+    return {
+      observationTime: String(body['Observation Time'] ?? ''),
+      forecastTime: String(body['Forecast Time'] ?? ''),
+      probability,
+    }
   } catch {
     return null
   }
 }
 
 async function fetchNOAAData(): Promise<NOAAData> {
-  const [scales, solarWind, planetaryK, hemisphericPower] = await Promise.all([
+  const [scales, solarWind, ovation] = await Promise.all([
     fetchNOAAScales(),
     fetchLatestSolarWind(),
-    fetchPlanetaryK(),
-    fetchHemisphericPower(),
+    fetchOvation(),
   ])
 
   const isMockData = scales === null
   return {
     scales: scales ?? MOCK_SCALES,
     solarWind,
-    planetaryK,
-    hemisphericPower,
+    ovation,
     fetchedAt: new Date().toISOString(),
     isMockData,
   }
 }
 
 /**
- * SWPC products update every minute at best, and each fetch fans out to four upstream
- * requests. Cache per instance so requests with distinct query strings (which miss the CDN)
+ * SWPC products update every minute at best, and each fetch fans out to three upstream
+ * requests (one of them the ~900 KB OVATION grid). Cache per instance so requests with distinct query strings (which miss the CDN)
  * cannot turn into an upstream request storm. Concurrent callers share one in-flight fetch.
  */
 const NOAA_CACHE_TTL_MS = 60_000

@@ -4,7 +4,9 @@ import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from '
 import { useTranslation } from '@/contexts/LanguageContext'
 
 interface AVSGaugeProps {
+  /** NOAA OVATION aurora probability, %. null = feed unavailable. */
   avs: number | null
+  scope: 'location' | 'hemisphere'
   activityLevel: string | null
   activityColor: string | null
   loading?: boolean
@@ -29,14 +31,14 @@ function getActivityEmoji(level: string | null): string {
   return map[level ?? 'none'] ?? '🌙'
 }
 
-export default function AVSGauge({ avs, activityLevel, activityColor, loading }: AVSGaugeProps) {
+export default function AVSGauge({ avs, scope, activityLevel, activityColor, loading }: AVSGaugeProps) {
   const { t } = useTranslation()
   const score = avs ?? 0
   const color = activityColor ?? '#6b7280'
   const gradientClass = avs !== null ? getAVSGradient(avs) : 'from-gray-700 to-gray-600'
 
   const chartData = [{ name: 'AVS', value: score, fill: color }]
-  const description = avs === null ? t.loading : (t.avsActivity[activityLevel ?? 'none'] ?? t.loading)
+  const description = avs === null ? t.avsUnavailable : (t.avsActivity[activityLevel ?? 'none'] ?? t.loading)
   const label = t.activityLabel[activityLevel ?? 'none'] ?? activityLevel ?? 'unknown'
 
   return (
@@ -81,9 +83,9 @@ export default function AVSGauge({ avs, activityLevel, activityColor, loading }:
 
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             <span className={`text-4xl font-bold font-mono bg-gradient-to-br ${gradientClass} bg-clip-text text-transparent`}>
-              {score}
+              {avs === null ? '—' : `${score}%`}
             </span>
-            <span className="text-xs text-gray-500 mt-1">/ 100</span>
+            <span className="text-xs text-gray-500 mt-1">{t.avsScope[scope]}</span>
             <span className="text-lg mt-1">{getActivityEmoji(activityLevel)}</span>
           </div>
         </div>

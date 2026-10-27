@@ -94,7 +94,7 @@ const JSON_LD = {
         'Real-time aurora borealis visibility dashboard with AI-powered, carbon-optimized viewing route recommendations. Uses live NOAA space weather data and Google Gemini AI.',
       featureList: [
         'Real-time aurora activity tracking via NOAA SWPC',
-        'Aurora Visibility Score (AVS) computation',
+        'NOAA OVATION 30-minute aurora probability at your location',
         'Interactive aurora visibility zone map',
         'AI-powered Green Path sustainable route recommendations',
         'Carbon footprint savings calculation',

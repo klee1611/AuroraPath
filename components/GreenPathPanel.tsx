@@ -90,6 +90,9 @@ export default function GreenPathPanel({
   demoRecommendations,
 }: GreenPathPanelProps) {
   const IS_DEV = process.env.NODE_ENV === 'development'
+  // Gate on NOAA's best probability within Green Path's reach — the server applies the same
+  // rule. Without a location yet, the hemisphere peak stands in. null = forecast unavailable.
+  const chance = auroraData ? (auroraData.nearbyPeak ?? auroraData.avs) : null
   const { user, isLoading: authLoading } = useUser()
   const { t } = useTranslation()
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null)
@@ -226,19 +229,24 @@ export default function GreenPathPanel({
             {t.locationPrivacy}
           </p>
 
-          {auroraData && (auroraData.avs ?? 0) < 10 && !IS_DEV && (
+          {auroraData && chance === null && !IS_DEV && (
             <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400 text-left">
-              {t.noActivity(auroraData.avs ?? 0)}
+              {t.avsUnavailable}
             </div>
           )}
-          {auroraData && (auroraData.avs ?? 0) < 10 && IS_DEV && (
-            <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-400 text-left">
-              ⚙️ <strong>DEV</strong>: AVS is {auroraData.avs ?? 0} (quiet) — button enabled for local testing only.
+          {chance !== null && chance < 10 && !IS_DEV && (
+            <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400 text-left">
+              {t.noActivity(chance)}
             </div>
           )}
-          {auroraData && (auroraData.avs ?? 0) >= 10 && (auroraData.avs ?? 0) < 35 && (
+          {auroraData && (chance ?? 0) < 10 && IS_DEV && (
             <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-400 text-left">
-              {t.lowActivity(auroraData.avs ?? 0)}
+              ⚙️ <strong>DEV</strong>: NOAA aurora chance is {chance ?? 'unavailable'}{chance !== null && '%'} (quiet) — button enabled for local testing only.
+            </div>
+          )}
+          {chance !== null && chance >= 10 && chance < 35 && (
+            <div className="mb-4 mx-auto max-w-sm px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-400 text-left">
+              {t.lowActivity(chance)}
             </div>
           )}
 
@@ -250,8 +258,8 @@ export default function GreenPathPanel({
 
           <button
             onClick={requestLocation}
-            disabled={!auroraData || (!IS_DEV && (auroraData.avs ?? 0) < 10)}
-            title={!IS_DEV && (auroraData?.avs ?? 0) < 10 ? t.noActivityTooltip : undefined}
+            disabled={!auroraData || (!IS_DEV && (chance ?? 0) < 10)}
+            title={!IS_DEV && (chance ?? 0) < 10 ? t.noActivityTooltip : undefined}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity duration-200
               disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none
               bg-aurora-gradient text-aurora-dark font-bold hover:opacity-90"

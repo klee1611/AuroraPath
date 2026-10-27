@@ -34,7 +34,7 @@ const mockGetNOAAData = jest.fn()
 jest.mock('@/lib/noaa', () => ({ getNOAAData: mockGetNOAAData }))
 
 const mockBuildAuroraResponse = jest.fn()
-jest.mock('@/lib/vscore', () => ({ buildAuroraResponse: mockBuildAuroraResponse }))
+jest.mock('@/lib/vscore', () => ({ buildAuroraResponse: mockBuildAuroraResponse, GREEN_PATH_REACH_KM: 300 }))
 
 const mockRelease = jest.fn()
 function reservation(overrides: Record<string, unknown> = {}) {
@@ -68,7 +68,7 @@ describe('POST /api/green-path', () => {
     // Default: quota slot reserved with 4 remaining; live conditions well above the gate
     mockCheckAndIncrementQuota.mockResolvedValue(reservation())
     mockGetNOAAData.mockResolvedValue({})
-    mockBuildAuroraResponse.mockReturnValue({ avs: 62, gScale: 3 })
+    mockBuildAuroraResponse.mockReturnValue({ avs: 62, nearbyPeak: 71, gScale: 3 })
   })
 
   describe('authentication', () => {
@@ -178,7 +178,7 @@ describe('POST /api/green-path', () => {
       await POST(makePostRequest(dirtyBody))
 
       const callArgs = mockGetGreenPathRecommendations.mock.calls[0]
-      const sanitizedRegion: string = callArgs[4]
+      const sanitizedRegion: string = callArgs[5]
       expect(sanitizedRegion).not.toContain('\x00')
       expect(sanitizedRegion).not.toContain('\x1f')
     })
@@ -188,8 +188,9 @@ describe('POST /api/green-path', () => {
       await POST(makePostRequest({ ...VALID_BODY, avs: 9999, gScale: 5 }))
 
       expect(mockBuildAuroraResponse).toHaveBeenCalledWith(expect.anything(), { lat: 65.0, lng: 25.0 })
-      const [avs, gScale] = mockGetGreenPathRecommendations.mock.calls[0]
-      expect(avs).toBe(62)
+      const [probability, nearbyPeak, gScale] = mockGetGreenPathRecommendations.mock.calls[0]
+      expect(probability).toBe(62)
+      expect(nearbyPeak).toBe(71)
       expect(gScale).toBe(3)
     })
 
@@ -211,14 +212,14 @@ describe('POST /api/green-path', () => {
     beforeEach(() => {
       mockGetSession.mockResolvedValue({ user: { sub: 'auth0|test123' } })
       mockGetGreenPathRecommendations.mockResolvedValue(MOCK_RECS)
-      mockBuildAuroraResponse.mockReturnValue({ avs: 4, gScale: 0 })
+      mockBuildAuroraResponse.mockReturnValue({ avs: 4, nearbyPeak: 6, gScale: 0 })
     })
 
     afterEach(() => {
       ;(process.env as Record<string, string>).NODE_ENV = originalEnv as string
     })
 
-    it('returns 409 without spending quota when server-computed AVS is below 10', async () => {
+    it('returns 409 without spending quota when NOAA probability within reach is below 10%', async () => {
       ;(process.env as Record<string, string>).NODE_ENV = 'production'
       const { POST } = await import('@/app/api/green-path/route')
       const res = await POST(makePostRequest({ ...VALID_BODY, avs: 90 }))
@@ -226,6 +227,25 @@ describe('POST /api/green-path', () => {
       expect(res.status).toBe(409)
       expect(mockCheckAndIncrementQuota).not.toHaveBeenCalled()
       expect(mockGetGreenPathRecommendations).not.toHaveBeenCalled()
+    })
+
+    it('passes the gate when aurora is within reach even if the user\'s own cell is quiet', async () => {
+      ;(process.env as Record<string, string>).NODE_ENV = 'production'
+      mockBuildAuroraResponse.mockReturnValue({ avs: 2, nearbyPeak: 35, gScale: 1 })
+      const { POST } = await import('@/app/api/green-path/route')
+      const res = await POST(makePostRequest(VALID_BODY))
+
+      expect(res.status).toBe(200)
+    })
+
+    it('returns 503 without spending quota when the NOAA aurora forecast is unavailable', async () => {
+      ;(process.env as Record<string, string>).NODE_ENV = 'production'
+      mockBuildAuroraResponse.mockReturnValue({ avs: null, nearbyPeak: null, gScale: 1 })
+      const { POST } = await import('@/app/api/green-path/route')
+      const res = await POST(makePostRequest(VALID_BODY))
+
+      expect(res.status).toBe(503)
+      expect(mockCheckAndIncrementQuota).not.toHaveBeenCalled()
     })
 
     it('skips the gate in development', async () => {

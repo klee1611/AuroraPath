@@ -45,8 +45,8 @@ export default function AuroraPathDashboardClient() {
 
   const fetchAuroraData = useCallback(async () => {
     try {
-      // Coarsen to ~11 km before sending: the oval model works at ~2° granularity, so this
-      // costs no accuracy while limiting precision shared and improving cache hit rate.
+      // Coarsen to ~11 km before sending: NOAA's OVATION grid is 1°, so this costs no
+      // accuracy while limiting precision shared and improving cache hit rate.
       const coords = userLocation
         ? `lat=${userLocation.lat.toFixed(1)}&lng=${userLocation.lng.toFixed(1)}`
         : ''
@@ -174,6 +174,7 @@ export default function AuroraPathDashboardClient() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <AVSGauge
                 avs={auroraData?.avs ?? null}
+                scope={auroraData?.avsScope ?? 'hemisphere'}
                 activityLevel={auroraData?.activityLevel ?? null}
                 activityColor={auroraData?.activityColor ?? null}
                 loading={loading}
