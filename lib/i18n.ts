@@ -25,6 +25,13 @@ export const translations = {
       hemisphere: 'Peak in the Northern Hemisphere',
     } as Record<string, string>,
     avsUnavailable: 'NOAA aurora forecast is unavailable right now.',
+    useMyLocation: 'Check my location',
+    locating: 'Finding you…',
+    useHemispherePeak: 'Show hemisphere peak',
+    locationDenied: 'Location access was blocked. Allow it in your browser settings to see the chance where you are.',
+    locationUnsupported: 'Your browser can\'t share a location.',
+    locationFailed: 'Couldn\'t find your location. Please try again.',
+    forecastFor: (time: string) => `Forecast for ${time}`,
     avsActivity: {
       excellent: 'Prime aurora viewing — visible at mid-latitudes!',
       high: 'Strong aurora activity — great conditions tonight.',
@@ -37,7 +44,7 @@ export const translations = {
       high: 'High activity',
       moderate: 'Moderate activity',
       low: 'Low activity',
-      none: 'None activity',
+      none: 'No activity',
     } as Record<string, string>,
 
     // Geomagnetic Panel
@@ -54,6 +61,8 @@ export const translations = {
 
     // Map
     mapTitle: 'Aurora Viewing Zones',
+    mapLegendTitle: 'NOAA aurora chance',
+    mapNoAurora: 'NOAA forecasts no aurora above 10% right now.',
 
     // Green Path Panel
     greenPathTitle: '🌿 Green Path AI',
@@ -118,6 +127,13 @@ export const translations = {
       hemisphere: '北半球最高值',
     } as Record<string, string>,
     avsUnavailable: '目前無法取得 NOAA 極光預報。',
+    useMyLocation: '查看我的位置',
+    locating: '定位中…',
+    useHemispherePeak: '顯示北半球最高值',
+    locationDenied: '位置存取已被封鎖。請在瀏覽器設定中允許，以查看您所在位置的極光機率。',
+    locationUnsupported: '您的瀏覽器無法提供位置。',
+    locationFailed: '無法取得您的位置，請再試一次。',
+    forecastFor: (time: string) => `預報時間 ${time}`,
     avsActivity: {
       excellent: '絕佳觀測時機——中緯度地區可見！',
       high: '強烈極光活動——今晚條件極佳。',
@@ -147,6 +163,8 @@ export const translations = {
 
     // Map
     mapTitle: '極光觀測區域',
+    mapLegendTitle: 'NOAA 極光機率',
+    mapNoAurora: 'NOAA 預報目前沒有超過 10% 的極光。',
 
     // Green Path Panel
     greenPathTitle: '🌿 綠色路徑 AI',

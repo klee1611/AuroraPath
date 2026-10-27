@@ -5,6 +5,8 @@ import { useTranslation } from '@/contexts/LanguageContext'
 
 interface ScaleCardProps {
   label: string
+  /** NOAA scale letter (G/R/S) — not derived from the label, which is translated. */
+  letter: string
   description: string
   currentScale: number
   currentText: string
@@ -43,7 +45,7 @@ function ScaleBars({ scale, max }: { scale: number; max: number }) {
 }
 
 function ScaleCard({
-  label, description, currentScale, currentText, forecast,
+  label, letter, description, currentScale, currentText, forecast,
   maxScale, icon, loading, forecastLabel,
 }: ScaleCardProps) {
   const color = getScaleColor(currentScale)
@@ -81,9 +83,9 @@ function ScaleCard({
           className="text-3xl font-bold font-mono"
           style={{ color: currentScale > 0 ? color : '#6b7280' }}
         >
-          {label.charAt(0)}{currentScale}
+          {letter}{currentScale}
         </span>
-        <span className="text-xs text-gray-500 mb-1">/ {label.charAt(0)}{maxScale}</span>
+        <span className="text-xs text-gray-500 mb-1">/ {letter}{maxScale}</span>
       </div>
 
       <ScaleBars scale={currentScale} max={maxScale} />
@@ -124,6 +126,7 @@ export default function GeomagneticPanel({ data, loading }: GeomagneticPanelProp
   const scales = [
     {
       key: 'Geomagnetic',
+      letter: 'G',
       icon: '🌍',
       currentScale: data?.gScale ?? 0,
       currentText: data?.gText ?? 'none',
@@ -136,6 +139,7 @@ export default function GeomagneticPanel({ data, loading }: GeomagneticPanelProp
     },
     {
       key: 'Radio Blackout',
+      letter: 'R',
       icon: '📡',
       currentScale: data?.rScale ?? 0,
       currentText: data?.rScale === 0 ? 'none' : `R${data?.rScale}`,
@@ -144,6 +148,7 @@ export default function GeomagneticPanel({ data, loading }: GeomagneticPanelProp
     },
     {
       key: 'Solar Radiation',
+      letter: 'S',
       icon: '☀️',
       currentScale: data?.sScale ?? 0,
       currentText: data?.sScale === 0 ? 'none' : `S${data?.sScale}`,
@@ -167,7 +172,7 @@ export default function GeomagneticPanel({ data, loading }: GeomagneticPanelProp
         </h2>
         {data && !loading && (
           <span className="text-xs text-gray-600">
-            — {new Date(data.timestamp).toLocaleTimeString(locale === 'zh-TW' ? 'zh-TW' : 'en-US', { hour: '2-digit', minute: '2-digit' })} UTC
+            — {new Date(data.timestamp).toLocaleTimeString(locale === 'zh-TW' ? 'zh-TW' : 'en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}
           </span>
         )}
       </div>
@@ -177,6 +182,7 @@ export default function GeomagneticPanel({ data, loading }: GeomagneticPanelProp
           <ScaleCard
             key={s.key}
             label={scaleLabels[s.key]}
+            letter={s.letter}
             description={t.scaleDesc[s.key]}
             currentScale={s.currentScale}
             currentText={s.currentText}

@@ -1,4 +1,4 @@
-import type { NOAAData, AuroraAPIResponse, OvationGrid } from '@/types/noaa'
+import type { NOAAData, AuroraAPIResponse, OvalCell, OvationGrid } from '@/types/noaa'
 
 export type ActivityLevel = 'none' | 'low' | 'moderate' | 'high' | 'excellent'
 
@@ -71,6 +71,18 @@ export function ovationNorthernPeak(grid: OvationGrid): number {
     if (grid.probability[i] > peak) peak = grid.probability[i]
   }
   return peak
+}
+
+/** Every grid cell at or above `minProbability`, with longitudes shifted to −180–179 for the map. */
+export function ovationCells(grid: OvationGrid, minProbability: number): OvalCell[] {
+  const cells: OvalCell[] = []
+  for (let i = 0; i < grid.probability.length; i++) {
+    const p = grid.probability[i]
+    if (p < minProbability) continue
+    const lon = i % 360
+    cells.push([lon >= 180 ? lon - 360 : lon, Math.floor(i / 360) - 90, p])
+  }
+  return cells
 }
 
 export function getActivityMeta(avs: number): ActivityMeta {

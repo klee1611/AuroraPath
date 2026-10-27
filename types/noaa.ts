@@ -49,6 +49,15 @@ export interface OvationGrid {
   probability: Uint8Array
 }
 
+/** One OVATION grid cell for the map: [lng −180–179, lat, probability %]. */
+export type OvalCell = [lng: number, lat: number, probability: number]
+
+/** GET /api/aurora/oval — cells NOAA forecasts at 10% or more. */
+export interface AuroraOvalResponse {
+  forecastTime: string
+  cells: OvalCell[]
+}
+
 export interface NOAAData {
   scales: NOAAScalesResponse
   solarWind: SolarWindEntry | null

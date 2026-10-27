@@ -7,6 +7,14 @@ interface AVSGaugeProps {
   /** NOAA OVATION aurora probability, %. null = feed unavailable. */
   avs: number | null
   scope: 'location' | 'hemisphere'
+  /** When NOAA's forecast is valid for (ISO). */
+  forecastTime: string | null
+  /** False in demo mode, where the data is canned and location means nothing. */
+  canLocate: boolean
+  locating: boolean
+  locationError: string | null
+  onUseLocation: () => void
+  onClearLocation: () => void
   activityLevel: string | null
   activityColor: string | null
   loading?: boolean
@@ -20,19 +28,18 @@ function getAVSGradient(avs: number): string {
   return 'from-gray-600 to-gray-500'
 }
 
-function getActivityEmoji(level: string | null): string {
-  const map: Record<string, string> = {
-    excellent: '🌌',
-    high: '✨',
-    moderate: '🌠',
-    low: '🌃',
-    none: '🌙',
-  }
-  return map[level ?? 'none'] ?? '🌙'
-}
-
-export default function AVSGauge({ avs, scope, activityLevel, activityColor, loading }: AVSGaugeProps) {
-  const { t } = useTranslation()
+export default function AVSGauge({
+  avs, scope, forecastTime, canLocate, locating, locationError, onUseLocation, onClearLocation,
+  activityLevel, activityColor, loading,
+}: AVSGaugeProps) {
+  const { t, locale } = useTranslation()
+  const forecastLabel = forecastTime
+    ? new Date(forecastTime).toLocaleTimeString(locale === 'zh-TW' ? 'zh-TW' : 'en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      })
+    : null
   const score = avs ?? 0
   const color = activityColor ?? '#6b7280'
   const gradientClass = avs !== null ? getAVSGradient(avs) : 'from-gray-700 to-gray-600'
@@ -51,10 +58,12 @@ export default function AVSGauge({ avs, scope, activityLevel, activityColor, loa
         </h2>
       </div>
 
+      {/* Centre the gauge in whatever height the grid row gives the card. */}
+      <div className="flex-1 flex flex-col items-center justify-center">
       {loading ? (
-        <div className="w-48 h-48 rounded-full skeleton" />
+        <div className="w-52 h-52 rounded-full skeleton" />
       ) : (
-        <div className="relative w-48 h-48">
+        <div className="relative w-52 h-52">
           <ResponsiveContainer width="100%" height="100%">
             <RadialBarChart
               cx="50%"
@@ -82,13 +91,47 @@ export default function AVSGauge({ avs, scope, activityLevel, activityColor, loa
           </ResponsiveContainer>
 
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className={`text-4xl font-bold font-mono bg-gradient-to-br ${gradientClass} bg-clip-text text-transparent`}>
+            <span className={`text-5xl font-bold font-mono bg-gradient-to-br ${gradientClass} bg-clip-text text-transparent`}>
               {avs === null ? '—' : `${score}%`}
             </span>
-            <span className="text-xs text-gray-500 mt-1">{t.avsScope[scope]}</span>
-            <span className="text-lg mt-1">{getActivityEmoji(activityLevel)}</span>
           </div>
         </div>
+      )}
+
+      {/* Say what the number covers — below the ring, where it has room to wrap. */}
+      {!loading && avs !== null && (
+        <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+          <span aria-hidden="true">{scope === 'location' ? '📍' : '🧭'}</span>
+          {t.avsScope[scope]}
+        </p>
+      )}
+
+      {!loading && canLocate && (
+        scope === 'location' ? (
+          <button
+            type="button"
+            onClick={onClearLocation}
+            className="mt-1 text-xs text-gray-500 underline underline-offset-2 hover:text-gray-300"
+          >
+            {t.useHemispherePeak}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onUseLocation}
+            disabled={locating}
+            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+              bg-aurora-teal/10 text-aurora-teal border border-aurora-teal/30
+              hover:bg-aurora-teal/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
+          >
+            📍 {locating ? t.locating : t.useMyLocation}
+          </button>
+        )
+      )}
+      {locationError && (
+        <p role="alert" className="mt-2 text-xs text-red-400 max-w-[240px] text-center leading-relaxed">
+          {locationError}
+        </p>
       )}
 
       <div className="mt-4 text-center">
@@ -98,7 +141,7 @@ export default function AVSGauge({ avs, scope, activityLevel, activityColor, loa
           <>
             <span
               className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold capitalize"
-              style={{ backgroundColor: `${color}20`, color, borderColor: `${color}40`, border: '1px solid' }}
+              style={{ backgroundColor: `${color}20`, color, border: `1px solid ${color}40` }}
             >
               {label}
             </span>
@@ -109,8 +152,11 @@ export default function AVSGauge({ avs, scope, activityLevel, activityColor, loa
         )}
       </div>
 
+      </div>
+
       <p className="text-xs text-gray-600 mt-3 text-center">
         {t.avsBasedOn}
+        {forecastLabel && <> · {t.forecastFor(forecastLabel)}</>}
       </p>
     </div>
   )

@@ -3,6 +3,7 @@ import {
   getActivityMeta,
   ovationNorthernPeak,
   ovationPeakWithin,
+  ovationCells,
   ovationProbabilityAt,
 } from '@/lib/vscore'
 import type { NOAAData, NOAAScaleEntry, NOAAScalesResponse, OvationGrid } from '@/types/noaa'
@@ -91,6 +92,20 @@ describe('ovationNorthernPeak', () => {
 
   it('is 0 for an empty grid', () => {
     expect(ovationNorthernPeak(grid([]))).toBe(0)
+  })
+})
+
+describe('ovationCells', () => {
+  it('keeps only cells at or above the threshold', () => {
+    const cells = ovationCells(grid([[19, 70, 42], [20, 70, 9], [21, 70, 10]]), 10)
+    expect(cells).toEqual(expect.arrayContaining([[19, 70, 42], [21, 70, 10]]))
+    expect(cells).toHaveLength(2)
+  })
+
+  it('shifts longitudes 180–359 to −180–−1 for the map', () => {
+    expect(ovationCells(grid([[212, 65, 55], [180, 60, 20]]), 10)).toEqual(
+      expect.arrayContaining([[-148, 65, 55], [-180, 60, 20]])
+    )
   })
 })
 
