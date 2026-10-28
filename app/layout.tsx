@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import { Suspense } from 'react'
+import { headers } from 'next/headers'
 import { Auth0Provider } from '@auth0/nextjs-auth0/client'
 import { auth0 } from '@/lib/auth0'
 import { LanguageProvider } from '@/contexts/LanguageContext'
@@ -9,13 +9,6 @@ import './globals.css'
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://aurora-path.vercel.app'
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-  preload: true,
-})
 
 const TITLE = 'AuroraPath — Sustainable Aurora Viewing'
 const DESCRIPTION =
@@ -120,6 +113,7 @@ const JSON_LD = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Pre-fetch session server-side so Auth0Provider can hydrate useUser() without a round-trip
   const session = await auth0.getSession()
+  const nonce = (await headers()).get('x-nonce') ?? undefined
   return (
     <html lang="en" className="dark">
       <head>
@@ -130,10 +124,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* JSON-LD structured data */}
         <script
           type="application/ld+json"
+          nonce={nonce}
           dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
         />
       </head>
-      <body suppressHydrationWarning className={`${inter.variable} font-sans bg-aurora-dark text-white antialiased min-h-screen`}>
+      <body suppressHydrationWarning className="font-sans bg-aurora-dark text-white antialiased min-h-screen">
         {/* Auth0Provider pre-populated with server-side user to avoid client round-trip */}
         <Auth0Provider user={session?.user}>
           <LanguageProvider>{children}</LanguageProvider>

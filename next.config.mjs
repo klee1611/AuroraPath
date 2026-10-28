@@ -1,7 +1,18 @@
 /** @type {import('next').NextConfig} */
-const isDev = process.env.NODE_ENV === 'development'
-
 const nextConfig = {
+  webpack(config) {
+    // Auth0 deliberately uses a runtime-constructed `crypto` import so bundlers
+    // leave Node's built-in module external. Suppress only webpack's warning for
+    // that intentional pattern; keep unrelated critical dependency warnings.
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      {
+        module: /@auth0[\\/]nextjs-auth0[\\/]dist[\\/]utils[\\/]dpopUtils\.js/,
+        message: /Critical dependency: the request of a dependency is an expression/,
+      },
+    ]
+    return config
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 's.gravatar.com' },
@@ -28,30 +39,6 @@ const nextConfig = {
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
-          },
-          // Content Security Policy
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              // Scripts: self + GA + inline scripts for Next.js hydration
-              // unsafe-eval required in dev for React source map reconstruction
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com`,
-              // Styles: self + unsafe-inline for Tailwind/Leaflet
-              "style-src 'self' 'unsafe-inline'",
-              // Images: self + data URIs (Leaflet icons) + Gravatar/Auth0 avatars + Stadia tiles
-              "img-src 'self' data: blob: https://s.gravatar.com https://*.auth0.com https://tiles.stadiamaps.com https://tile.openstreetmap.org",
-              // Connections: self + NOAA APIs + Auth0 + GA4 (both domains) + Upstash + Nominatim
-              "connect-src 'self' https://services.swpc.noaa.gov https://*.auth0.com https://www.google-analytics.com https://analytics.google.com https://nominatim.openstreetmap.org https://*.upstash.io",
-              // Fonts: self only
-              "font-src 'self'",
-              // Workers: blob URLs for Leaflet web workers
-              "worker-src blob:",
-              // Frames: none
-              "frame-src 'none'",
-              // Objects: none
-              "object-src 'none'",
-            ].join('; '),
           },
         ],
       },

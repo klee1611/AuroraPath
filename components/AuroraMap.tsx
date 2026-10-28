@@ -173,7 +173,7 @@ export default function AuroraMap({ ovalCells, recommendations, userLocation, se
         const marker = Leaflet.marker([rec.lat, rec.lng], { icon })
           .addTo(pinLayerRef.current!)
           .bindPopup(`
-            <div style="background:#111827;color:#fff;padding:12px;border-radius:8px;min-width:200px;font-family:Inter,sans-serif;">
+            <div style="background:#111827;color:#fff;padding:12px;border-radius:8px;min-width:200px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
               <strong style="color:#00ff88;">${escHtml(rec.name)}</strong>
               <p style="color:#9ca3af;font-size:12px;margin:6px 0;">${escHtml(rec.description)}</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
