@@ -1,18 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  webpack(config) {
-    // Auth0 deliberately uses a runtime-constructed `crypto` import so bundlers
-    // leave Node's built-in module external. Suppress only webpack's warning for
-    // that intentional pattern; keep unrelated critical dependency warnings.
-    config.ignoreWarnings = [
-      ...(config.ignoreWarnings ?? []),
-      {
-        module: /@auth0[\\/]nextjs-auth0[\\/]dist[\\/]utils[\\/]dpopUtils\.js/,
-        message: /Critical dependency: the request of a dependency is an expression/,
-      },
-    ]
-    return config
-  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 's.gravatar.com' },
