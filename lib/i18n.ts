@@ -18,8 +18,20 @@ export const translations = {
     signOut: 'Sign out',
 
     // AVS Gauge
-    avsTitle: 'Aurora Visibility Score',
-    avsBasedOn: 'Based on NOAA geomagnetic & solar wind data',
+    avsTitle: 'Aurora Chance',
+    avsBasedOn: 'NOAA SWPC OVATION 30-minute aurora forecast',
+    avsScope: {
+      location: 'At your location',
+      hemisphere: 'Peak in the Northern Hemisphere',
+    } as Record<string, string>,
+    avsUnavailable: 'NOAA aurora forecast is unavailable right now.',
+    useMyLocation: 'Check my location',
+    locating: 'Finding you…',
+    useHemispherePeak: 'Show hemisphere peak',
+    locationDenied: 'Location access was blocked. Allow it in your browser settings to see the chance where you are.',
+    locationUnsupported: 'Your browser can\'t share a location.',
+    locationFailed: 'Couldn\'t find your location. Please try again.',
+    forecastFor: (time: string) => `Forecast for ${time}`,
     avsActivity: {
       excellent: 'Prime aurora viewing — visible at mid-latitudes!',
       high: 'Strong aurora activity — great conditions tonight.',
@@ -32,7 +44,7 @@ export const translations = {
       high: 'High activity',
       moderate: 'Moderate activity',
       low: 'Low activity',
-      none: 'None activity',
+      none: 'No activity',
     } as Record<string, string>,
 
     // Geomagnetic Panel
@@ -49,6 +61,8 @@ export const translations = {
 
     // Map
     mapTitle: 'Aurora Viewing Zones',
+    mapLegendTitle: 'NOAA aurora chance',
+    mapNoAurora: 'NOAA forecasts no aurora above 10% right now.',
 
     // Green Path Panel
     greenPathTitle: '🌿 Green Path AI',
@@ -59,10 +73,10 @@ export const translations = {
     welcome: 'Welcome,',
     locationDesc: 'Share your location to get 3 sustainable aurora viewing recommendations from our AI agent.',
     locationPrivacy: '🔒 Your location is only used for this request and is never stored.',
-    noActivity: (avs: number) =>
-      `🌑 No aurora activity right now (AVS ${avs}/100). Green Path requires at least minimal aurora activity to be useful — check back when conditions improve.`,
-    lowActivity: (avs: number) =>
-      `⚠️ Aurora activity is low (AVS ${avs}/100). Viewing is possible only at very high latitudes — we'll find the best available spots.`,
+    noActivity: (pct: number) =>
+      `🌑 NOAA forecasts no aurora right now (${pct}% chance). Green Path requires at least minimal aurora activity to be useful — check back when conditions improve.`,
+    lowActivity: (pct: number) =>
+      `⚠️ NOAA forecasts a low aurora chance (${pct}%). Viewing is possible only at very high latitudes — we'll find the best available spots.`,
     quotaWarning: (remaining: number, limit: number) =>
       `⚡ Last search remaining today (${remaining}/${limit}). Resets at midnight UTC.`,
     getGreenPath: 'Get My Green Path 🌿',
@@ -106,8 +120,20 @@ export const translations = {
     signOut: '登出',
 
     // AVS Gauge
-    avsTitle: '極光可見度評分',
-    avsBasedOn: '根據 NOAA 地磁及太陽風資料',
+    avsTitle: '極光機率',
+    avsBasedOn: 'NOAA SWPC OVATION 30 分鐘極光預報',
+    avsScope: {
+      location: '您所在的位置',
+      hemisphere: '北半球最高值',
+    } as Record<string, string>,
+    avsUnavailable: '目前無法取得 NOAA 極光預報。',
+    useMyLocation: '查看我的位置',
+    locating: '定位中…',
+    useHemispherePeak: '顯示北半球最高值',
+    locationDenied: '位置存取已被封鎖。請在瀏覽器設定中允許，以查看您所在位置的極光機率。',
+    locationUnsupported: '您的瀏覽器無法提供位置。',
+    locationFailed: '無法取得您的位置，請再試一次。',
+    forecastFor: (time: string) => `預報時間 ${time}`,
     avsActivity: {
       excellent: '絕佳觀測時機——中緯度地區可見！',
       high: '強烈極光活動——今晚條件極佳。',
@@ -137,6 +163,8 @@ export const translations = {
 
     // Map
     mapTitle: '極光觀測區域',
+    mapLegendTitle: 'NOAA 極光機率',
+    mapNoAurora: 'NOAA 預報目前沒有超過 10% 的極光。',
 
     // Green Path Panel
     greenPathTitle: '🌿 綠色路徑 AI',
@@ -147,10 +175,10 @@ export const translations = {
     welcome: '歡迎，',
     locationDesc: '分享您的位置，從 AI 代理獲取 3 個永續極光觀測建議。',
     locationPrivacy: '🔒 您的位置僅用於本次請求，不會被儲存。',
-    noActivity: (avs: number) =>
-      `🌑 目前無極光活動（AVS ${avs}/100）。綠色路徑需要至少基本的極光活動——請待條件改善後再試。`,
-    lowActivity: (avs: number) =>
-      `⚠️ 極光活動偏低（AVS ${avs}/100）。僅在極高緯度地區可能可見——我們將為您找到最佳可用地點。`,
+    noActivity: (pct: number) =>
+      `🌑 NOAA 預報目前沒有極光（機率 ${pct}%）。綠色路徑需要至少基本的極光活動——請待條件改善後再試。`,
+    lowActivity: (pct: number) =>
+      `⚠️ NOAA 預報極光機率偏低（${pct}%）。僅在極高緯度地區可能可見——我們將為您找到最佳可用地點。`,
     quotaWarning: (remaining: number, limit: number) =>
       `⚡ 今日最後一次搜尋機會（${remaining}/${limit}）。每日 UTC 午夜重置。`,
     getGreenPath: '取得我的綠色路徑 🌿',

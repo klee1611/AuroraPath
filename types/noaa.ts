@@ -39,33 +39,31 @@ export interface SolarWindEntry {
   arrivesAt: string
 }
 
-/** Planetary K-index — continuous 0–9 (e.g. 3.67), unlike the quantised NOAA G-scale. */
-export interface PlanetaryKEntry {
-  timeTag: string
-  kp: number
+/**
+ * OVATION Prime 30-minute aurora forecast — SWPC's probability of visible aurora on a 1° grid.
+ * `probability` is indexed by `(lat + 90) * 360 + lon`, with lon in 0–359 (east) and lat −90–90.
+ */
+export interface OvationGrid {
+  observationTime: string
+  forecastTime: string
+  probability: Uint8Array
 }
 
-/** OVATION Prime hemispheric power — total auroral energy deposition per hemisphere. */
-export interface HemisphericPowerEntry {
-  timeTag: string   // valid (forecast) time
-  northGW: number
-  southGW: number
+/** One OVATION grid cell for the map: [lng −180–179, lat, probability %]. */
+export type OvalCell = [lng: number, lat: number, probability: number]
+
+/** GET /api/aurora/oval — cells NOAA forecasts at 10% or more. */
+export interface AuroraOvalResponse {
+  forecastTime: string
+  cells: OvalCell[]
 }
 
 export interface NOAAData {
   scales: NOAAScalesResponse
   solarWind: SolarWindEntry | null
-  planetaryK: PlanetaryKEntry | null
-  hemisphericPower: HemisphericPowerEntry | null
+  ovation: OvationGrid | null
   fetchedAt: string
   isMockData: boolean
-}
-
-/** Per-driver breakdown of the AVS, each normalised to 0–100. null = feed unavailable. */
-export interface AVSComponents {
-  hemisphericPower: number | null
-  kp: number | null
-  coupling: number | null
 }
 
 export interface AuroraAPIResponse {
@@ -78,23 +76,29 @@ export interface AuroraAPIResponse {
   /** IMF in GSM (nT); bz < 0 is southward. */
   bz: number | null
   bt: number | null
-  /** Continuous planetary K-index, 0–9. */
-  kp: number | null
-  /** OVATION Prime hemispheric power for the observer's hemisphere, GW. */
-  hemisphericPowerGW: number | null
-  avs: number
-  /** Location-independent activity strength, 0–100, before the visibility factor. */
-  activity: number
-  /** 0–1 multiplier for how visible that activity is from the observer. 1 when location unknown. */
-  visibilityFactor: number
-  avsComponents: AVSComponents
-  /** Observer's geomagnetic latitude, and the oval's equatorward edge. Both null without a location. */
-  observerMLat: number | null
-  ovalBoundaryMLat: number | null
+  /**
+   * NOAA OVATION aurora probability, 0–100%. At the observer's location when one was given,
+   * otherwise the peak anywhere in the northern hemisphere. null when the OVATION feed is down.
+   */
+  avs: number | null
+  avsScope: 'location' | 'hemisphere'
+  /** Peak OVATION probability within Green Path's 300 km reach of the observer; null without a location. */
+  nearbyPeak: number | null
+  /** Time the OVATION forecast is valid for (roughly 30–90 minutes ahead of observation). */
+  ovationForecastTime: string | null
   activityLevel: 'none' | 'low' | 'moderate' | 'high' | 'excellent'
   activityColor: string
-  forecast24h: { g: number; text: string }
-  forecast48h: { g: number; text: string }
+  /**
+   * NOAA's outlook for the next day. G is a forecast scale level; for R and S NOAA publishes
+   * only probabilities (%): R1–R2 (minor) and R3–R5 (major) radio blackouts, and S1+ radiation storms.
+   */
+  forecast24h: {
+    g: number
+    text: string
+    rMinorProb: number | null
+    rMajorProb: number | null
+    sProb: number | null
+  }
   timestamp: string
   isMockData: boolean
 }

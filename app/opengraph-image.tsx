@@ -1,6 +1,5 @@
 import { ImageResponse } from 'next/og'
 
-export const runtime = 'edge'
 export const alt = 'AuroraPath — Sustainable Aurora Viewing'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
@@ -63,7 +62,7 @@ export default function OgImage() {
             boxShadow: '0 0 60px rgba(0,255,136,0.4)',
           }}
         >
-          <div style={{ fontSize: '44px' }}>🌌</div>
+          <div style={{ fontSize: '44px', fontWeight: '800', color: '#0a0a1a' }}>A</div>
         </div>
 
         {/* App name */}
@@ -95,10 +94,10 @@ export default function OgImage() {
         {/* Feature pills */}
         <div style={{ display: 'flex', gap: '16px' }}>
           {[
-            '🛰  Live NOAA Data',
-            '🌿  Green Path AI',
-            '🗺  Aurora Map',
-            '♻️  Carbon Savings',
+            'Live NOAA Data',
+            'Green Path AI',
+            'Aurora Map',
+            'Carbon Savings',
           ].map((feat) => (
             <div
               key={feat}

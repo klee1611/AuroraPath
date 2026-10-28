@@ -5,11 +5,13 @@ import { useTranslation } from '@/contexts/LanguageContext'
 
 interface ScaleCardProps {
   label: string
+  /** NOAA scale letter (G/R/S) — not derived from the label, which is translated. */
+  letter: string
   description: string
   currentScale: number
   currentText: string
-  forecastScale: number
-  forecastText: string
+  /** NOAA's next-day outlook line; omitted when there is nothing to add. */
+  forecast: React.ReactNode | null
   maxScale: number
   color: string
   icon: React.ReactNode
@@ -43,7 +45,7 @@ function ScaleBars({ scale, max }: { scale: number; max: number }) {
 }
 
 function ScaleCard({
-  label, description, currentScale, currentText, forecastScale, forecastText,
+  label, letter, description, currentScale, currentText, forecast,
   maxScale, icon, loading, forecastLabel,
 }: ScaleCardProps) {
   const color = getScaleColor(currentScale)
@@ -81,22 +83,19 @@ function ScaleCard({
           className="text-3xl font-bold font-mono"
           style={{ color: currentScale > 0 ? color : '#6b7280' }}
         >
-          {label.charAt(0)}{currentScale}
+          {letter}{currentScale}
         </span>
-        <span className="text-xs text-gray-500 mb-1">/ {label.charAt(0)}{maxScale}</span>
+        <span className="text-xs text-gray-500 mb-1">/ {letter}{maxScale}</span>
       </div>
 
       <ScaleBars scale={currentScale} max={maxScale} />
 
       <p className="text-xs text-gray-500 mt-2 leading-relaxed">{description}</p>
 
-      {forecastScale !== currentScale && (
+      {forecast && (
         <div className="mt-3 pt-3 border-t border-aurora-border">
           <span className="text-xs text-gray-500">
-            {forecastLabel}:{' '}
-            <span style={{ color: getScaleColor(forecastScale) }}>
-              {label.charAt(0)}{forecastScale} — {forecastText}
-            </span>
+            {forecastLabel}: {forecast}
           </span>
         </div>
       )}
@@ -109,35 +108,51 @@ interface GeomagneticPanelProps {
   loading?: boolean
 }
 
+/** NOAA forecast probabilities as "R1–R2 10% · R3–R5 1%"; null when NOAA gave none. */
+function probabilityLine(parts: Array<[label: string, prob: number | null]>): React.ReactNode | null {
+  const present = parts.filter((p): p is [string, number] => p[1] !== null)
+  if (!present.length) return null
+  return (
+    <span className="text-gray-300">
+      {present.map(([label, prob]) => `${label} ${prob}%`).join(' · ')}
+    </span>
+  )
+}
+
 export default function GeomagneticPanel({ data, loading }: GeomagneticPanelProps) {
   const { t, locale } = useTranslation()
+  const f24 = data?.forecast24h
 
   const scales = [
     {
       key: 'Geomagnetic',
+      letter: 'G',
       icon: '🌍',
       currentScale: data?.gScale ?? 0,
       currentText: data?.gText ?? 'none',
-      forecastScale: data?.forecast24h.g ?? 0,
-      forecastText: data?.forecast24h.text ?? 'none',
+      // NOAA forecasts a G level; only worth a line when it differs from now.
+      forecast:
+        f24 && f24.g !== (data?.gScale ?? 0) ? (
+          <span style={{ color: getScaleColor(f24.g) }}>G{f24.g} — {f24.text}</span>
+        ) : null,
       maxScale: 5,
     },
     {
       key: 'Radio Blackout',
+      letter: 'R',
       icon: '📡',
       currentScale: data?.rScale ?? 0,
       currentText: data?.rScale === 0 ? 'none' : `R${data?.rScale}`,
-      forecastScale: data?.rScale ?? 0,
-      forecastText: data?.rScale === 0 ? 'none' : `R${data?.rScale}`,
+      forecast: f24 ? probabilityLine([['R1–R2', f24.rMinorProb], ['R3–R5', f24.rMajorProb]]) : null,
       maxScale: 5,
     },
     {
       key: 'Solar Radiation',
+      letter: 'S',
       icon: '☀️',
       currentScale: data?.sScale ?? 0,
       currentText: data?.sScale === 0 ? 'none' : `S${data?.sScale}`,
-      forecastScale: data?.sScale ?? 0,
-      forecastText: data?.sScale === 0 ? 'none' : `S${data?.sScale}`,
+      forecast: f24 ? probabilityLine([['S1+', f24.sProb]]) : null,
       maxScale: 5,
     },
   ]
@@ -157,7 +172,7 @@ export default function GeomagneticPanel({ data, loading }: GeomagneticPanelProp
         </h2>
         {data && !loading && (
           <span className="text-xs text-gray-600">
-            — {new Date(data.timestamp).toLocaleTimeString(locale === 'zh-TW' ? 'zh-TW' : 'en-US', { hour: '2-digit', minute: '2-digit' })} UTC
+            — {new Date(data.timestamp).toLocaleTimeString(locale === 'zh-TW' ? 'zh-TW' : 'en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}
           </span>
         )}
       </div>
@@ -167,11 +182,11 @@ export default function GeomagneticPanel({ data, loading }: GeomagneticPanelProp
           <ScaleCard
             key={s.key}
             label={scaleLabels[s.key]}
+            letter={s.letter}
             description={t.scaleDesc[s.key]}
             currentScale={s.currentScale}
             currentText={s.currentText}
-            forecastScale={s.forecastScale}
-            forecastText={s.forecastText}
+            forecast={s.forecast}
             maxScale={s.maxScale}
             color={getScaleColor(s.currentScale)}
             icon={s.icon}

@@ -20,36 +20,33 @@ const VALID_SOLAR_WIND: unknown[][] = [
   ['2026-04-19T02:04:00Z', 452.1, 6.3, 92000, 2.4, -1.8, -3.6, 4.6, -452, 14, -9, '2026-04-19T02:54:00Z'],
 ]
 
-const VALID_KP = [
-  { time_tag: '2026-04-19T00:00:00', Kp: 4.33, a_running: 27, station_count: 8 },
-  { time_tag: '2026-04-19T03:00:00', Kp: 5.67, a_running: 48, station_count: 8 },
-]
-
-const VALID_HEMI_POWER = [
-  '#Aurora Hemispheric Power Tabular Values',
-  '# Observation        Forecast            North    South',
-  '#-------------------------------------------------------',
-  '2026-04-19_01:55    2026-04-19_02:50      41      38',
-  '2026-04-19_02:00    2026-04-19_02:55      45      42',
-].join('\n')
+const VALID_OVATION = {
+  'Observation Time': '2026-04-19T02:05:00Z',
+  'Forecast Time': '2026-04-19T03:10:00Z',
+  'Data Format': '[Longitude, Latitude, Aurora]',
+  coordinates: [
+    [0, -90, 2],
+    [19, 70, 42],
+    [212, 65, 55],
+    [359, 90, 0],
+  ],
+}
 
 interface FeedOverrides {
   scales?: unknown | 'fail'
   solarWind?: unknown | 'fail'
-  kp?: unknown | 'fail'
-  hemiPower?: string | 'fail'
+  ovation?: unknown | 'fail'
 }
 
 /**
- * getNOAAData fires four independent requests in parallel, so mocks are dispatched by URL
+ * getNOAAData fires three independent requests in parallel, so mocks are dispatched by URL
  * rather than call order.
  */
 function mockFeeds(overrides: FeedOverrides = {}) {
   const {
     scales = VALID_SCALES,
     solarWind = VALID_SOLAR_WIND,
-    kp = VALID_KP,
-    hemiPower = VALID_HEMI_POWER,
+    ovation = VALID_OVATION,
   } = overrides
 
   mockFetch.mockImplementation((url: string) => {
@@ -63,8 +60,7 @@ function mockFeeds(overrides: FeedOverrides = {}) {
     }
     if (url.includes('noaa-scales')) return respond(scales)
     if (url.includes('propagated-solar-wind')) return respond(solarWind)
-    if (url.includes('planetary-k-index')) return respond(kp)
-    if (url.includes('hemi-power')) return respond(hemiPower, true)
+    if (url.includes('ovation_aurora')) return respond(ovation)
     return Promise.resolve({ ok: false } as Response)
   })
 }
@@ -158,40 +154,47 @@ describe('getNOAAData', () => {
     expect(data.solarWind?.by).toBeCloseTo(3.3)
   })
 
-  it('parses the most recent planetary K-index', async () => {
+  it('parses the OVATION grid into a lon/lat-indexed probability array', async () => {
     mockFeeds()
     const data = await getNOAAData()
-    expect(data.planetaryK?.kp).toBeCloseTo(5.67)
+    const at = (lon: number, lat: number) => data.ovation!.probability[(lat + 90) * 360 + lon]
+    expect(data.ovation?.forecastTime).toBe('2026-04-19T03:10:00Z')
+    expect(data.ovation?.observationTime).toBe('2026-04-19T02:05:00Z')
+    expect(data.ovation?.probability).toHaveLength(360 * 181)
+    expect(at(19, 70)).toBe(42)
+    expect(at(212, 65)).toBe(55)
+    expect(at(0, -90)).toBe(2)
+    expect(at(100, 50)).toBe(0)
   })
 
-  it('returns null planetaryK when that feed fails', async () => {
-    mockFeeds({ kp: 'fail' })
+  it('skips malformed OVATION points and clamps probabilities to 0–100', async () => {
+    mockFeeds({
+      ovation: {
+        ...VALID_OVATION,
+        coordinates: [[19, 70, 42], [360, 70, 50], [19, 91, 50], ['19', 70, 50], [20, 70, 140], [21, 70, null]],
+      },
+    })
     const data = await getNOAAData()
-    expect(data.planetaryK).toBeNull()
-    // Other feeds are unaffected
-    expect(data.solarWind).not.toBeNull()
+    const at = (lon: number, lat: number) => data.ovation!.probability[(lat + 90) * 360 + lon]
+    expect(at(19, 70)).toBe(42)
+    expect(at(20, 70)).toBe(100)
+    expect(at(21, 70)).toBe(0)
   })
 
-  it('parses the latest hemispheric power row, ignoring comments', async () => {
-    mockFeeds()
-    const data = await getNOAAData()
-    expect(data.hemisphericPower?.northGW).toBe(45)
-    expect(data.hemisphericPower?.southGW).toBe(42)
-  })
-
-  it('returns null hemisphericPower when the file has no data rows', async () => {
-    mockFeeds({ hemiPower: '#only comments\n#nothing else' })
-    const data = await getNOAAData()
-    expect(data.hemisphericPower).toBeNull()
+  it('returns null ovation when the feed fails or has no usable points', async () => {
+    mockFeeds({ ovation: 'fail' })
+    expect((await getNOAAData()).ovation).toBeNull()
+    clearNOAACache()
+    mockFeeds({ ovation: { ...VALID_OVATION, coordinates: [] } })
+    expect((await getNOAAData()).ovation).toBeNull()
   })
 
   it('degrades to scales only when every other feed fails', async () => {
-    mockFeeds({ solarWind: 'fail', kp: 'fail', hemiPower: 'fail' })
+    mockFeeds({ solarWind: 'fail', ovation: 'fail' })
     const data = await getNOAAData()
     expect(data.isMockData).toBe(false)
     expect(data.solarWind).toBeNull()
-    expect(data.planetaryK).toBeNull()
-    expect(data.hemisphericPower).toBeNull()
+    expect(data.ovation).toBeNull()
   })
 
   it('serves repeat calls from cache instead of re-fetching upstream', async () => {
@@ -205,6 +208,6 @@ describe('getNOAAData', () => {
   it('shares one upstream fetch between concurrent callers', async () => {
     mockFeeds()
     await Promise.all([getNOAAData(), getNOAAData(), getNOAAData()])
-    expect(mockFetch.mock.calls.length).toBe(4) // one request per feed
+    expect(mockFetch.mock.calls.length).toBe(3) // one request per feed
   })
 })

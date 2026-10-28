@@ -60,8 +60,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Optional observer position — lets the score account for whether the auroral oval
-    // actually reaches the user's geomagnetic latitude. Omitted = activity strength only.
+    // Optional observer position — reads NOAA's OVATION probability at that grid cell.
+    // Omitted = the peak probability anywhere in the northern hemisphere.
     const latParam = parseFloat(req.nextUrl.searchParams.get('lat') ?? '')
     const lngParam = parseFloat(req.nextUrl.searchParams.get('lng') ?? '')
     // Round to 0.1° (~11 km) server-side too — the client already does, but other callers

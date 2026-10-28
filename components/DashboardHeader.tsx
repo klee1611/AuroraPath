@@ -83,8 +83,8 @@ export default function DashboardHeader({ avs, lastUpdated, isMockData }: Dashbo
           )}
           {avs !== null && (
             <span className="text-gray-300">
-              AVS <span className="font-mono font-bold text-white">{avs}</span>
-              <span className="text-gray-500">/100</span>
+              {t.avsTitle} <span className="font-mono font-bold text-white">{avs}</span>
+              <span className="text-gray-500">%</span>
             </span>
           )}
         </div>

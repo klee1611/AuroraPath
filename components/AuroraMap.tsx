@@ -1,22 +1,41 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { GreenPathRecommendation } from '@/types/noaa'
+import type { GreenPathRecommendation, OvalCell } from '@/types/noaa'
+import { useTranslation } from '@/contexts/LanguageContext'
 
 interface AuroraMapProps {
-  gScale: number
+  /** NOAA OVATION cells at 10%+; null while loading or unavailable. */
+  ovalCells: OvalCell[] | null
   recommendations: GreenPathRecommendation[]
   userLocation: { lat: number; lng: number } | null
   selectedRecIndex: number | null
 }
 
-const AURORA_BANDS: Record<number, { lat: number; color: string }[]> = {
-  0: [],
-  1: [{ lat: 67, color: '#00ff8840' }],
-  2: [{ lat: 67, color: '#00ff8840' }, { lat: 60, color: '#00d4ff30' }],
-  3: [{ lat: 67, color: '#00ff8840' }, { lat: 60, color: '#00d4ff30' }, { lat: 50, color: '#8b5cf620' }],
-  4: [{ lat: 67, color: '#00ff8840' }, { lat: 60, color: '#00d4ff30' }, { lat: 50, color: '#8b5cf620' }, { lat: 45, color: '#f472b615' }],
-  5: [{ lat: 67, color: '#00ff8840' }, { lat: 60, color: '#00d4ff30' }, { lat: 50, color: '#8b5cf620' }, { lat: 45, color: '#f472b615' }, { lat: 30, color: 'rgba(249,115,22,0.08)' }],
+/** Colour ramp for NOAA's aurora probability — green → yellow → red, like SWPC's own map. */
+const OVAL_BANDS: Array<{ min: number; color: string }> = [
+  { min: 60, color: '#ef4444' },
+  { min: 35, color: '#facc15' },
+  { min: 10, color: '#00ff88' },
+]
+
+function ovalColor(probability: number): string {
+  return (OVAL_BANDS.find(b => probability >= b.min) ?? OVAL_BANDS[OVAL_BANDS.length - 1]).color
+}
+
+/** Fade weak cells so the oval reads as a glow rather than a solid block. */
+function ovalOpacity(probability: number): number {
+  return Math.min(0.15 + (probability / 100) * 0.6, 0.7)
+}
+
+/**
+ * NOAA's grid is 1°, which renders as hard-edged blocks once zoomed in. Blurring the oval's
+ * pane by roughly a cell softens it into the continuous glow it represents. Mercator stretches
+ * cells ~2.4× vertically at auroral latitudes, hence the factor above one cell width.
+ */
+function ovalBlurPx(zoom: number): number {
+  const cellPx = (256 * 2 ** zoom) / 360
+  return Math.min(Math.max(cellPx * 1.5, 2), 40)
 }
 
 function escHtml(str: string): string {
@@ -32,7 +51,8 @@ type LeafletMap = import('leaflet').Map
 type LeafletLayerGroup = import('leaflet').LayerGroup
 type LeafletMarker = import('leaflet').Marker
 
-export default function AuroraMap({ gScale, recommendations, userLocation, selectedRecIndex }: AuroraMapProps) {
+export default function AuroraMap({ ovalCells, recommendations, userLocation, selectedRecIndex }: AuroraMapProps) {
+  const { t } = useTranslation()
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<LeafletMap | null>(null)
   // Separate layer groups so we can clear/redraw data without touching the base map
@@ -74,6 +94,16 @@ export default function AuroraMap({ gScale, recommendations, userLocation, selec
         }
       ).addTo(map)
 
+      // Own pane for the oval: above tiles, below markers, blurred in proportion to zoom.
+      const ovalPane = map.createPane('aurora-oval')
+      ovalPane.style.zIndex = '350'
+      ovalPane.style.pointerEvents = 'none'
+      const updateBlur = () => {
+        ovalPane.style.filter = `blur(${ovalBlurPx(map.getZoom()).toFixed(1)}px)`
+      }
+      updateBlur()
+      map.on('zoomend', updateBlur)
+
       bandLayerRef.current = L.default.layerGroup().addTo(map)
       pinLayerRef.current = L.default.layerGroup().addTo(map)
       userLayerRef.current = L.default.layerGroup().addTo(map)
@@ -92,24 +122,30 @@ export default function AuroraMap({ gScale, recommendations, userLocation, selec
     }
   }, []) // mount/unmount only
 
-  // ── Effect 2: update aurora bands when G-scale changes ─────────────────────
+  // ── Effect 2: draw NOAA's OVATION aurora probability grid ───────────────────
   useEffect(() => {
     if (!mapReady || !bandLayerRef.current) return
-    const L = (window as unknown as { L?: typeof import('leaflet') }).L
-    // Use dynamic import result cached in closure if needed
     ;(async () => {
       const Leaflet = (await import('leaflet')).default
       if (!bandLayerRef.current) return
       bandLayerRef.current.clearLayers()
-      const bands = AURORA_BANDS[Math.min(gScale, 5)] ?? []
-      bands.forEach(({ lat, color }) => {
+      // A few thousand 1° cells — canvas keeps that cheap where SVG would mean thousands of nodes.
+      const renderer = Leaflet.canvas({ padding: 0.5, pane: 'aurora-oval' })
+      for (const [lng, lat, probability] of ovalCells ?? []) {
         Leaflet.rectangle(
-          [[lat, -180], [90, 180]],
-          { color, fillColor: color, weight: 0, fillOpacity: 0.25, interactive: false }
-        ).addTo(bandLayerRef.current!)
-      })
+          [[lat - 0.5, lng - 0.5], [lat + 0.5, lng + 0.5]],
+          {
+            renderer,
+            pane: 'aurora-oval',
+            stroke: false,
+            fillColor: ovalColor(probability),
+            fillOpacity: ovalOpacity(probability),
+            interactive: false,
+          }
+        ).addTo(bandLayerRef.current)
+      }
     })()
-  }, [mapReady, gScale])
+  }, [mapReady, ovalCells])
 
   // ── Effect 3: update recommendation pins when Green Path arrives ────────────
   useEffect(() => {
@@ -137,7 +173,7 @@ export default function AuroraMap({ gScale, recommendations, userLocation, selec
         const marker = Leaflet.marker([rec.lat, rec.lng], { icon })
           .addTo(pinLayerRef.current!)
           .bindPopup(`
-            <div style="background:#111827;color:#fff;padding:12px;border-radius:8px;min-width:200px;font-family:Inter,sans-serif;">
+            <div style="background:#111827;color:#fff;padding:12px;border-radius:8px;min-width:200px;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
               <strong style="color:#00ff88;">${escHtml(rec.name)}</strong>
               <p style="color:#9ca3af;font-size:12px;margin:6px 0;">${escHtml(rec.description)}</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
@@ -193,7 +229,7 @@ export default function AuroraMap({ gScale, recommendations, userLocation, selec
       <div className="p-4 border-b border-aurora-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-            Aurora Viewing Zones
+            {t.mapTitle}
           </h2>
           {recommendations.length > 0 && (
             <span className="text-xs bg-aurora-green/10 text-aurora-green border border-aurora-green/30 px-2 py-0.5 rounded-full">
@@ -201,22 +237,24 @@ export default function AuroraMap({ gScale, recommendations, userLocation, selec
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-gray-600">
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-1.5 rounded-sm" style={{ background: '#00ff8880' }} />
-            High activity
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-1.5 rounded-sm" style={{ background: '#00d4ff50' }} />
-            Moderate
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-1.5 rounded-sm" style={{ background: '#8b5cf640' }} />
-            Low activity
-          </span>
+        <div className="flex items-center gap-3 text-xs text-gray-500 shrink-0">
+          <span className="hidden sm:inline">{t.mapLegendTitle}</span>
+          {[...OVAL_BANDS].reverse().map(b => (
+            <span key={b.min} className="flex items-center gap-1">
+              <span className="w-3 h-1.5 rounded-sm" style={{ background: b.color, opacity: ovalOpacity(b.min) + 0.2 }} />
+              {b.min}%+
+            </span>
+          ))}
         </div>
       </div>
-      <div ref={mapRef} className="h-96 w-full" />
+      <div className="relative">
+        <div ref={mapRef} className="h-96 w-full" />
+        {ovalCells?.length === 0 && (
+          <p className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[400] text-xs text-gray-300 bg-aurora-dark/80 border border-aurora-border rounded-lg px-3 py-1.5 pointer-events-none text-center">
+            {t.mapNoAurora}
+          </p>
+        )}
+      </div>
     </div>
   )
 }

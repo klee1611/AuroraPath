@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import type { AuroraAPIResponse, GreenPathRecommendation } from '@/types/noaa'
+import type { AuroraAPIResponse, AuroraOvalResponse, GreenPathRecommendation, OvalCell } from '@/types/noaa'
 import { DEMO_SCENARIOS } from '@/lib/mockScenarios'
 import DashboardHeader from '@/components/DashboardHeader'
 import AVSGauge from '@/components/AVSGauge'
@@ -25,6 +25,39 @@ const AuroraMap = dynamic(() => import('@/components/AuroraMap'), {
   ),
 })
 const POLL_INTERVAL_MS = 30_000
+/** OVATION refreshes every few minutes; the map doesn't need the 30s cadence. */
+const OVAL_POLL_INTERVAL_MS = 120_000
+/** Remembered so returning visitors see their own chance without asking again. */
+const LOCATION_STORAGE_KEY = 'aurorapath.location'
+
+type Location = { lat: number; lng: number }
+
+/** Coarsen to 0.1° (~11 km) — finer than NOAA's 1° grid needs, and all we store or send. */
+function coarsen(lat: number, lng: number): Location {
+  return { lat: Math.round(lat * 10) / 10, lng: Math.round(lng * 10) / 10 }
+}
+
+function loadStoredLocation(): Location | null {
+  try {
+    const raw = localStorage.getItem(LOCATION_STORAGE_KEY)
+    if (!raw) return null
+    const { lat, lng } = JSON.parse(raw) as Partial<Location>
+    return typeof lat === 'number' && typeof lng === 'number' && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+      ? coarsen(lat, lng)
+      : null
+  } catch {
+    return null
+  }
+}
+
+function storeLocation(location: Location | null) {
+  try {
+    if (location) localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(location))
+    else localStorage.removeItem(LOCATION_STORAGE_KEY)
+  } catch {
+    // Storage blocked (private mode etc.) — the location just won't be remembered.
+  }
+}
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
@@ -40,13 +73,52 @@ export default function AuroraPathDashboardClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [recommendations, setRecommendations] = useState<GreenPathRecommendation[]>([])
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [userLocation, setUserLocation] = useState<Location | null>(null)
+  const [locating, setLocating] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [ovalCells, setOvalCells] = useState<OvalCell[] | null>(null)
   const [selectedRecIndex, setSelectedRecIndex] = useState<number | null>(null)
+
+  // Restore a remembered location after hydration (localStorage is client-only).
+  useEffect(() => {
+    if (demoId) return
+    const stored = loadStoredLocation()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (stored) setUserLocation(stored)
+  }, [demoId])
+
+  function locateUser() {
+    if (!navigator.geolocation) {
+      setLocationError(t.locationUnsupported)
+      return
+    }
+    setLocating(true)
+    setLocationError(null)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const location = coarsen(pos.coords.latitude, pos.coords.longitude)
+        storeLocation(location)
+        setUserLocation(location)
+        setLocating(false)
+      },
+      err => {
+        setLocationError(err.code === err.PERMISSION_DENIED ? t.locationDenied : t.locationFailed)
+        setLocating(false)
+      },
+      { timeout: 10000, maximumAge: 600_000 }
+    )
+  }
+
+  function clearLocation() {
+    storeLocation(null)
+    setUserLocation(null)
+    setLocationError(null)
+  }
 
   const fetchAuroraData = useCallback(async () => {
     try {
-      // Coarsen to ~11 km before sending: the oval model works at ~2° granularity, so this
-      // costs no accuracy while limiting precision shared and improving cache hit rate.
+      // Coarsened to ~11 km already: NOAA's OVATION grid is 1°, so this costs no accuracy
+      // while limiting precision shared and improving cache hit rate.
       const coords = userLocation
         ? `lat=${userLocation.lat.toFixed(1)}&lng=${userLocation.lng.toFixed(1)}`
         : ''
@@ -78,13 +150,37 @@ export default function AuroraPathDashboardClient() {
     return () => clearInterval(interval)
   }, [fetchAuroraData, demoId])
 
+  // NOAA's probability grid for the map — not available for canned demo scenarios.
+  useEffect(() => {
+    if (demoId) return
+    let cancelled = false
+    async function fetchOval() {
+      try {
+        const res = await fetch('/api/aurora/oval')
+        if (!res.ok) return
+        const data = (await res.json()) as AuroraOvalResponse
+        if (!cancelled) setOvalCells(data.cells)
+      } catch {
+        // Keep the last grid; the gauge already reports a NOAA outage.
+      }
+    }
+    fetchOval()
+    const interval = setInterval(fetchOval, OVAL_POLL_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [demoId])
+
   // Track user location when Green Path is fetched
   function handleRecommendations(recs: GreenPathRecommendation[]) {
     setRecommendations(recs)
     setSelectedRecIndex(null)
     if (recs.length > 0 && !userLocation) {
       navigator.geolocation?.getCurrentPosition(pos => {
-        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        const location = coarsen(pos.coords.latitude, pos.coords.longitude)
+        storeLocation(location)
+        setUserLocation(location)
       })
     }
   }
@@ -174,6 +270,13 @@ export default function AuroraPathDashboardClient() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <AVSGauge
                 avs={auroraData?.avs ?? null}
+                scope={auroraData?.avsScope ?? 'hemisphere'}
+                forecastTime={auroraData?.ovationForecastTime ?? null}
+                canLocate={!demoId}
+                locating={locating}
+                locationError={locationError}
+                onUseLocation={locateUser}
+                onClearLocation={clearLocation}
                 activityLevel={auroraData?.activityLevel ?? null}
                 activityColor={auroraData?.activityColor ?? null}
                 loading={loading}
@@ -185,7 +288,7 @@ export default function AuroraPathDashboardClient() {
           {/* Map */}
           <section>
             <AuroraMap
-              gScale={auroraData?.gScale ?? 0}
+              ovalCells={ovalCells}
               recommendations={recommendations}
               userLocation={userLocation}
               selectedRecIndex={selectedRecIndex}

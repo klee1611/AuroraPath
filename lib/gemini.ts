@@ -28,7 +28,14 @@ CRITICAL GEOGRAPHIC RULE: Every recommendation MUST be geographically close to t
 
 Return ONLY valid JSON — no markdown, no explanation, no commentary.`
 
-const USER_PROMPT_TEMPLATE = (avs: number, gScale: number, region: string, lat: number, lng: number) => {
+const USER_PROMPT_TEMPLATE = (
+  probability: number,
+  nearbyPeak: number,
+  gScale: number,
+  region: string,
+  lat: number,
+  lng: number
+) => {
   // Compute a ~300km bounding box. 1° lat ≈ 111km; 1° lng ≈ 111km × cos(lat)
   const latDelta = 2.7  // ~300km
   const lngDelta = Math.min(15, 2.7 / Math.max(Math.cos((lat * Math.PI) / 180), 0.15))
@@ -40,7 +47,8 @@ const USER_PROMPT_TEMPLATE = (avs: number, gScale: number, region: string, lat: 
   }
 
   return `Current space weather conditions:
-- Aurora Visibility Score (AVS): ${avs}/100
+- NOAA OVATION aurora probability at the user's location: ${probability}%
+- Highest NOAA OVATION aurora probability within ~300km: ${nearbyPeak}%
 - Geomagnetic G-scale: G${gScale} (${gScaleDescription(gScale)})
 - User location: ${region}
 - Exact coordinates: ${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E
@@ -90,7 +98,8 @@ function gScaleDescription(g: number): string {
 }
 
 export async function getGreenPathRecommendations(
-  avs: number,
+  probability: number,
+  nearbyPeak: number,
   gScale: number,
   lat: number,
   lng: number,
@@ -101,7 +110,7 @@ export async function getGreenPathRecommendations(
     systemInstruction: SYSTEM_PROMPT,
   })
 
-  const prompt = USER_PROMPT_TEMPLATE(avs, gScale, region, lat, lng)
+  const prompt = USER_PROMPT_TEMPLATE(probability, nearbyPeak, gScale, region, lat, lng)
 
   const result = await model.generateContent({
     contents: [{ role: 'user', parts: [{ text: prompt }] }],

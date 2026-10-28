@@ -3,7 +3,7 @@ import { auth0, assertAgentIdentity } from '@/lib/auth0'
 import { getGreenPathRecommendations } from '@/lib/gemini'
 import { checkAndIncrementQuota, type QuotaReservation } from '@/lib/ratelimit'
 import { getNOAAData } from '@/lib/noaa'
-import { buildAuroraResponse } from '@/lib/vscore'
+import { buildAuroraResponse, GREEN_PATH_REACH_KM } from '@/lib/vscore'
 import { describeError } from '@/lib/errors'
 
 export const maxDuration = 30 // Allow up to 30s for Gemini response
@@ -14,8 +14,11 @@ interface GreenPathRequest {
   region: string
 }
 
-/** Below this AVS there is nothing to see — matches the client-side button gate. */
-const MIN_AVS = 10
+/**
+ * Below this NOAA OVATION probability (%) within reach there is nothing to see — SWPC's own map
+ * starts shading at 10%. Matches the client-side button gate.
+ */
+const MIN_PROBABILITY = 10
 
 /** Sanitize a user-supplied string to prevent prompt injection into Gemini. */
 function sanitizeRegion(raw: unknown): string {
@@ -81,12 +84,25 @@ export async function POST(req: NextRequest) {
     // Derive conditions server-side — client-supplied avs/gScale are ignored so the gate
     // below cannot be bypassed and the prompt cannot be fed fabricated conditions.
     const conditions = buildAuroraResponse(await getNOAAData(), { lat, lng })
-    const { avs, gScale } = conditions
+    const { gScale } = conditions
+    const isDev = process.env.NODE_ENV === 'development'
 
-    // Development skips the gate so the feature can be tested during quiet conditions.
-    if (avs < MIN_AVS && process.env.NODE_ENV !== 'development') {
+    // Without NOAA's aurora forecast there is no basis for gating or for the prompt.
+    if ((conditions.avs === null || conditions.nearbyPeak === null) && !isDev) {
       return NextResponse.json(
-        { error: `Aurora activity is too low at your location right now (AVS ${avs}). Try again when activity picks up.` },
+        { error: 'NOAA aurora forecast is temporarily unavailable. Please try again in a few minutes.' },
+        { status: 503, headers: { ...headers, 'Retry-After': '120' } }
+      )
+    }
+    const probability = conditions.avs ?? 0
+    const nearbyPeak = conditions.nearbyPeak ?? 0
+
+    // Gate on the best spot within Green Path's reach, not just the user's own grid cell —
+    // the point of the feature is to travel to where the aurora is.
+    // Development skips the gate so the feature can be tested during quiet conditions.
+    if (nearbyPeak < MIN_PROBABILITY && !isDev) {
+      return NextResponse.json(
+        { error: `NOAA forecasts too little aurora near you right now (peak ${nearbyPeak}% within ${GREEN_PATH_REACH_KM} km). Try again when activity picks up.` },
         { status: 409, headers }
       )
     }
@@ -126,7 +142,7 @@ export async function POST(req: NextRequest) {
     const { hasIdentity, agentId } = await assertAgentIdentity()
     console.log(`[GreenPath Agent] Identity: ${agentId} (managed: ${hasIdentity}) | user: ${maskedUserId}`)
 
-    const recommendations = await getGreenPathRecommendations(avs, gScale, lat, lng, region)
+    const recommendations = await getGreenPathRecommendations(probability, nearbyPeak, gScale, lat, lng, region)
 
     return NextResponse.json(
       {
